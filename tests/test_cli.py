@@ -32,9 +32,15 @@ def test_decrypt_command(tmp_path: Path, capsys) -> None:
     dictdata = tmp_path / "dictdata"
     dictdata.mkdir()
     (dictdata / "acu_desc_0.s").write_bytes(ciphertext)
+    (dictdata / "acu_nilai.txt").write_bytes(b"plaintext word list")
+    (dictdata / "stats.txt").write_bytes(b"plaintext stats")
 
     output = tmp_path / "out"
     assert main(["decrypt", str(dictdata), "-o", str(output)]) == 0
 
     assert (output / "acu_desc_0.cav").read_bytes() == plaintext
-    assert "done: 1 written, 0 skipped, 1 total" in capsys.readouterr().out
+    assert (output / "acu_nilai.txt").read_bytes() == b"plaintext word list"
+    assert (output / "stats.txt").read_bytes() == b"plaintext stats"
+    captured = capsys.readouterr().out
+    assert "done: 1 written, 0 skipped, 1 total" in captured
+    assert "plaintext: 2 copied, 0 skipped" in captured

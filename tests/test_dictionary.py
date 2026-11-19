@@ -2,8 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from kbbi_extract.dictionary import Dictionary
+from kbbi_extract.dictionary import Dictionary, decrypt_blocks
 from kbbi_extract.paths import DEFAULT_DICTDATA
+
+
+def test_existing_cav_blocks_are_loaded_without_decryption(tmp_path) -> None:
+    block = bytes([0x03, 0x05]) + b"rumah" + bytes([0xFF])
+    (tmp_path / "acu_desc_0.cav").write_bytes(block)
+
+    assert decrypt_blocks(tmp_path) == {0: block}
 
 
 def test_real_dictionary_loads_and_parses() -> None:

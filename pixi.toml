@@ -13,7 +13,6 @@ kbbi-extract = { path = ".", editable = true }
 
 [feature.dev.dependencies]
 pytest = ">=8"
-ruff = ">=0.6"
 
 [environments]
 default = { features = ["dev"], solve-group = "default" }
@@ -22,6 +21,5 @@ default = { features = ["dev"], solve-group = "default" }
 decrypt = "python scripts/decrypt_dict.py"
 extract = "python scripts/extract_dict.py"
 test = "python -m pytest"
-lint = "ruff check src scripts tests"
 key = "python -m kbbi_extract key"
 info = "python -m kbbi_extract info"

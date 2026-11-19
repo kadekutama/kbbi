@@ -106,14 +106,17 @@ pixi run kbbi-extract decrypt --raw-gzip -o output/raw-gzip
 pixi run key
 ```
 
-`decrypt` writes one file per input block:
+`decrypt` writes one file per encrypted input block and copies every
+non-encrypted dictionary file into the same output directory:
 
 | Mode | Output |
 | --- | --- |
-| default | `output/dictdata/acu_desc_N.cav` (gunzipped CAV) |
-| `--raw-gzip` | `output/dictdata/acu_desc_N.s.gz` (Salsa20 plaintext) |
+| default | `output/dictdata/acu_desc_N.cav` (gunzipped CAV) plus `acu_nilai.txt`, `acu_offlens.txt`, `stats.txt`, `kat_*.txt`, … |
+| `--raw-gzip` | `output/dictdata/acu_desc_N.s.gz` (Salsa20 plaintext) plus the same plaintext tables |
 
-Existing files are skipped unless `--force` is passed.
+Existing files are skipped unless `--force` is passed.  The combined output
+directory is self-contained: `pixi run kbbi-extract info output/dictdata` and
+`pixi run kbbi-extract extract output/dictdata` work directly from it.
 
 ## Verification
 

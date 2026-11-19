@@ -69,17 +69,32 @@ def block_number(path: Path) -> int:
 
 
 def decrypt_blocks(directory: Path) -> dict[int, bytes]:
-    """Decrypt every ``acu_desc_*.s`` file in ``directory``."""
+    """Load the CAV blocks in ``directory``.
+
+    Encrypted ``acu_desc_*.s`` files are decrypted.  If those are absent,
+    already-decrypted ``acu_desc_*.cav`` files are used directly.  The latter
+    makes a combined output directory self-contained.
+    """
     paths = sorted(directory.glob("acu_desc_*.s"), key=block_number)
+    encrypted = bool(paths)
+
     if not paths:
-        raise KbbiError(f"no acu_desc_*.s files found in {directory}")
+        paths = sorted(directory.glob("acu_desc_*.cav"), key=block_number)
+
+    if not paths:
+        raise KbbiError(f"no acu_desc_*.s or acu_desc_*.cav files found in {directory}")
 
     blocks: dict[int, bytes] = {}
     for path in paths:
         try:
-            blocks[block_number(path)] = decrypt_block(path.read_bytes())
+            blocks[block_number(path)] = (
+                decrypt_block(path.read_bytes()) if encrypted else path.read_bytes()
+            )
         except (OSError, ValueError) as exc:
-            raise KbbiError(f"could not decrypt {path.name}: {exc}") from exc
+            detail = f"could not read {path.name}: {exc}"
+            if encrypted:
+                detail += " The app version may have changed the key or format."
+            raise KbbiError(detail) from exc
 
     return blocks
 

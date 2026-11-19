@@ -372,4 +372,22 @@ Expected decryptor summary:
 
 ```text
 done: 28 written, 0 skipped, 28 total; 8,860,079 ciphertext bytes -> 26,240,696 plaintext bytes
+plaintext: 435 copied, 0 skipped
 ```
+
+## 13. Reusing the pipeline for a newer version
+
+The extraction pipeline is data-driven where it matters:
+
+- `decode_apk.sh` reads `manifest.json` for the package name and base APK,
+  and auto-selects the non-ABI `config.*` splits.  Use `PACKAGE`, `BASE_APK`,
+  `BASE_NAME`, or `XAPK_DIR` to override detection.
+- The CLI discovers `<decoded>/assets/composeResources/*/files/dictdata`, so
+  a renamed generated-resources package does not break the default path.
+- Block count, word count, offsets, and entries are parsed from the new
+  files.  Nothing assumes 28 blocks or 196,195 words.
+
+The version-specific part is the key/nonce and the Salsa20/GZIP container.  A
+database-only update normally leaves those unchanged.  If decryption fails
+with a GZIP error, re-derive the constants from the new `a1/j0`/`p8/l` smali
+and update `src/kbbi_extract/crypto.py`.

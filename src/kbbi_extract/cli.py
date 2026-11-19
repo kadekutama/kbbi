@@ -6,15 +6,23 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from shutil import copy2
 
 from .crypto import KEY_HEX, NONCE_HEX, decrypt_block, salsa20_decrypt
 from .dictionary import Dictionary, block_number
 from .errors import KbbiError
-from .paths import DEFAULT_DICTDATA, DEFAULT_OUTPUT_DIR
+from .paths import DEFAULT_DICTDATA, DEFAULT_OUTPUT_DIR, find_dictdata
 
 
-def _resolve_dictdata(value: Path | None) -> Path:
-    path = (value or DEFAULT_DICTDATA).expanduser()
+def _resolve_dictdata(value: Path | None, *, for_decrypt: bool = False) -> Path:
+    if value is not None:
+        path = value.expanduser()
+    elif for_decrypt:
+        path = find_dictdata() or DEFAULT_DICTDATA
+    else:
+        combined = DEFAULT_OUTPUT_DIR / "dictdata"
+        path = combined if combined.is_dir() else (find_dictdata() or DEFAULT_DICTDATA)
+
     if not path.is_dir():
         raise KbbiError(
             f"dictionary directory not found: {path}\n"
@@ -37,7 +45,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     decrypt_parser = subparsers.add_parser(
         "decrypt",
-        help="decrypt acu_desc_*.s files to CAV streams",
+        help="decrypt acu_desc_*.s files and copy the plaintext tables",
     )
     decrypt_parser.add_argument(
         "dictdata",
@@ -136,8 +144,33 @@ def _cmd_key(args: argparse.Namespace) -> int:
     return 0
 
 
+def _copy_plaintext_files(source: Path, destination: Path, force: bool) -> tuple[int, int]:
+    """Copy non-encrypted dictionary files into the combined output directory."""
+    if source.resolve() == destination.resolve():
+        return 0, 0
+
+    copied = 0
+    skipped = 0
+
+    for item in sorted(source.iterdir()):
+        if not item.is_file():
+            continue
+        if item.name.startswith(".") or item.name.startswith("acu_desc_"):
+            continue
+
+        target = destination / item.name
+        if target.exists() and not force:
+            skipped += 1
+            continue
+
+        copy2(item, target)
+        copied += 1
+
+    return copied, skipped
+
+
 def _cmd_decrypt(args: argparse.Namespace) -> int:
-    dictdata = _resolve_dictdata(args.dictdata)
+    dictdata = _resolve_dictdata(args.dictdata, for_decrypt=True)
     output = args.output.expanduser()
     output.mkdir(parents=True, exist_ok=True)
 
@@ -174,10 +207,13 @@ def _cmd_decrypt(args: argparse.Namespace) -> int:
                 f"({len(ciphertext):,} -> {len(payload):,} bytes)"
             )
 
+    copied, plain_skipped = _copy_plaintext_files(dictdata, output, args.force)
+
     print(
         f"done: {written} written, {skipped} skipped, {len(paths)} total; "
         f"{total_cipher:,} ciphertext bytes -> {total_plain:,} plaintext bytes"
     )
+    print(f"plaintext: {copied} copied, {plain_skipped} skipped")
     print(f"output: {output}")
     return 0
 
@@ -238,7 +274,7 @@ def _cmd_info(args: argparse.Namespace) -> int:
     for number in sorted(dictionary.blocks):
         size = len(dictionary.blocks[number])
         total_bytes += size
-        print(f"  acu_desc_{number}.s -> {size:,} bytes")
+        print(f"  block {number:>2} -> {size:,} bytes")
 
     print(f"total CAV:   {total_bytes:,} bytes")
     return 0

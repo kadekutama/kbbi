@@ -55,6 +55,11 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 └── output/                    # generated data (gitignored)
 ```
 
+`pixi.toml` owns the environment and tasks.  `pyproject.toml` is not
+redundant: pixi installs the local package in editable mode from it, which
+provides the `kbbi-extract` console command and the PyCryptodome dependency.
+There is no lint dependency; `pytest` is the only dev tool.
+
 ## Quick start
 
 The project uses a [pixi](https://pixi.sh/) workspace.  Create the environment
@@ -73,8 +78,17 @@ empty.  Once the decoded tree exists, decrypt every description block:
 pixi run decrypt
 ```
 
-The output is written to `output/dictdata/` as `acu_desc_*.cav` — the
-gunzipped CAV streams.  To extract all entries as JSONL:
+`output/dictdata/` is a complete, self-contained dataset: the decrypted
+`acu_desc_*.cav` blocks plus copies of the unencrypted `acu_nilai.txt`,
+`acu_offlens.txt`, `stats.txt`, `kat_*.txt`, and the other tables.
+
+```text
+output/
+├── dictdata/          # 28 decrypted .cav blocks + 435 plaintext files
+└── kbbi.jsonl         # 196,195 parsed entries (combined view)
+```
+
+To extract all entries as JSONL from the combined directory:
 
 ```bash
 pixi run extract
@@ -156,6 +170,23 @@ acu_desc_N.s -> Salsa20/20 -> GZIP -> CAV records -> entries
 See [`docs/decryption.md`](docs/decryption.md) for the exact derivation and
 [`docs/references.md`](docs/references.md) for the smali files and line ranges.
 
+## Future KBBI versions
+
+A database-only update normally keeps the same code and crypto, so the
+pipeline is reusable:
+
+- `decode_apk.sh` reads the package name and base APK from `manifest.json`,
+  and automatically selects the non-ABI `config.*` splits.
+- The decryptor discovers `files/dictdata` dynamically, so a changed
+  generated-resources package name (for example `kbbi6` → `kbbi7`) is fine.
+- Block count, word count, offsets, and entry contents are read from the new
+  files; nothing is hard-coded to the 6.2.0 database.
+
+What is still version-specific is the key/nonce and the crypto/container
+format.  If the app changes those, `decrypt` will fail with a GZIP or format
+error and the key must be re-derived from the new `a1/j0`/`p8/l` smali.  See
+[`docs/decryption.md`](docs/decryption.md).
+
 ## Documentation
 
 - [docs/reverse-engineering.md](docs/reverse-engineering.md) — XAPK → APKTool → smali → key.
@@ -168,7 +199,6 @@ See [`docs/decryption.md`](docs/decryption.md) for the exact derivation and
 
 ```bash
 pixi run test
-pixi run lint
 ```
 
 The crypto/format tests run without the APK.  Integration tests load the
