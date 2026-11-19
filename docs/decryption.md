@@ -63,11 +63,10 @@ were verified against the decrypted GZIP magic and against the independent
 
 ## Minimal Python decryption
 
-Requires PyCryptodome:
+The repository's pixi environment already contains PyCryptodome:
 
 ```bash
-pixi global install --environment python pycryptodome
-# or: python -m pip install pycryptodome
+pixi install
 ```
 
 ```python
@@ -94,19 +93,17 @@ The repository wraps the same logic:
 
 ```bash
 # All blocks, default paths
-python scripts/decrypt_dict.py
+pixi run decrypt
 
 # All blocks, explicit input and output
 DICTDATA=artifacts/decoded/assets/composeResources/kbbi6.composeapp.generated.resources/files/dictdata
-python scripts/decrypt_dict.py "$DICTDATA" -o output/dictdata
+pixi run kbbi-extract decrypt "$DICTDATA" -o output/dictdata
 
 # Keep the intermediate Salsa20 plaintext (GZIP bytes)
-python scripts/decrypt_dict.py --raw-gzip -o output/raw-gzip
+pixi run kbbi-extract decrypt --raw-gzip -o output/raw-gzip
 
 # Print key and nonce only
-PYTHONPATH=src python3 -m kbbi_extract key
-# or, after `pip install -e .`
-kbbi-extract key
+pixi run key
 ```
 
 `decrypt` writes one file per input block:

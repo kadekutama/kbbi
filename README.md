@@ -28,9 +28,9 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 ```text
 .
 ├── README.md
-├── pyproject.toml
-├── requirements.txt
-├── requirements-dev.txt
+├── pixi.toml                  # project environment + tasks
+├── pixi.lock                  # pinned environment
+├── pyproject.toml             # package metadata
 ├── .gitignore
 ├── src/kbbi_extract/          # reusable Python package
 │   ├── crypto.py              # key derivation, Salsa20, GZIP
@@ -57,11 +57,12 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 
 ## Quick start
 
-The Python in this environment is managed by pixi global.  Install the only
-runtime dependency once:
+The project uses a [pixi](https://pixi.sh/) workspace.  Create the environment
+once; it installs Python 3.12, PyCryptodome, the local `kbbi_extract` package
+in editable mode, and the dev tools:
 
 ```bash
-pixi global install --environment python pycryptodome
+pixi install
 ```
 
 Place the bundle at `artifacts/input/kbbi.xapk` (or pass a path to the unpack
@@ -69,41 +70,39 @@ script), then run the reproduction steps below if `artifacts/decoded/` is
 empty.  Once the decoded tree exists, decrypt every description block:
 
 ```bash
-python scripts/decrypt_dict.py
+pixi run decrypt
 ```
 
 The output is written to `output/dictdata/` as `acu_desc_*.cav` — the
 gunzipped CAV streams.  To extract all entries as JSONL:
 
 ```bash
-python scripts/extract_dict.py -o output/kbbi.jsonl
+pixi run extract
 ```
 
 Useful variations:
 
 ```bash
 # Inspect the derived key and nonce
-PYTHONPATH=src python3 -m kbbi_extract key
+pixi run key
+
+# Verify counts and decrypt all blocks
+pixi run info
 
 # Keep the intermediate GZIP stream instead of the CAV payload
 DICTDATA=artifacts/decoded/assets/composeResources/kbbi6.composeapp.generated.resources/files/dictdata
-python scripts/decrypt_dict.py "$DICTDATA" --raw-gzip -o output/raw
+pixi run kbbi-extract decrypt "$DICTDATA" --raw-gzip -o output/raw
 
 # A few entries as pretty JSON on stdout
-python scripts/extract_dict.py --limit 3 --format json
+pixi run kbbi-extract extract --limit 3 --format json
 
 # One headword
-python scripts/extract_dict.py --word rumah --format json -o output/rumah.json
+pixi run kbbi-extract extract --word rumah --format json -o output/rumah.json
 ```
 
-If you prefer an installed CLI:
-
-```bash
-python -m pip install -e .
-kbbi-extract info
-kbbi-extract decrypt
-kbbi-extract extract --format jsonl -o output/kbbi.jsonl
-```
+The editable install makes `kbbi-extract` available inside the pixi
+environment, so `pixi run kbbi-extract ...` is equivalent to
+`pixi run python -m kbbi_extract ...`.
 
 ## Reproduce from scratch
 
@@ -111,22 +110,25 @@ The detailed walk-through is in [`docs/reverse-engineering.md`](docs/reverse-eng
 The short version:
 
 ```bash
-# 0. Put the bundle at artifacts/input/kbbi.xapk
+# 0. Create the pixi environment
+pixi install
+
+# 1. Put the bundle at artifacts/input/kbbi.xapk
 mkdir -p artifacts/input
 cp /path/to/kbbi.xapk artifacts/input/kbbi.xapk
 
-# 1. Download APKTool 3.0.3 (once)
+# 2. Download APKTool 3.0.3 (once)
 scripts/setup_apktool.sh
 
-# 2. Unpack the XAPK
+# 3. Unpack the XAPK
 scripts/unpack_xapk.sh
 
-# 3. Decode the base APK with the resource-bearing splits
+# 4. Decode the base APK with the resource-bearing splits
 scripts/decode_apk.sh
 
-# 4. Decrypt and extract
-python scripts/decrypt_dict.py
-python scripts/extract_dict.py -o output/kbbi.jsonl
+# 5. Decrypt and extract
+pixi run decrypt
+pixi run extract
 ```
 
 > APKTool cannot open an XAPK directly.  It either treats the archive as an
@@ -165,8 +167,8 @@ See [`docs/decryption.md`](docs/decryption.md) for the exact derivation and
 ## Tests
 
 ```bash
-pixi global install --environment python pytest
-python3 -m pytest
+pixi run test
+pixi run lint
 ```
 
 The crypto/format tests run without the APK.  Integration tests load the

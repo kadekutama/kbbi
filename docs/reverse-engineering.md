@@ -37,8 +37,8 @@ The exact versions used for this write-up:
 | --- | --- |
 | APKTool | 3.0.3 |
 | Java | OpenJDK 26.0.2.1 |
-| Python | 3.15.2 (pixi global) |
-| PyCryptodome | 4.4.0 |
+| Python | 3.12.16 (pixi project environment) |
+| PyCryptodome | 4.5.0 (pixi project environment) |
 | jadx | optional, for cross-checking |
 | APKEditor | optional, for splitting/merging experiments |
 
@@ -360,11 +360,12 @@ External references:
 From the repository root:
 
 ```bash
+pixi install
 scripts/setup_apktool.sh
 scripts/unpack_xapk.sh
 scripts/decode_apk.sh
-python scripts/decrypt_dict.py
-python scripts/extract_dict.py -o output/kbbi.jsonl
+pixi run decrypt
+pixi run extract
 ```
 
 Expected decryptor summary:
