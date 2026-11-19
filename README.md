@@ -118,6 +118,22 @@ The editable install makes `kbbi-extract` available inside the pixi
 environment, so `pixi run kbbi-extract ...` is equivalent to
 `pixi run python -m kbbi_extract ...`.
 
+## Changing dependencies
+
+- **Runtime Python dependency:** add it to `[project.dependencies]` in
+  `pyproject.toml`. Pixi treats the local package as an editable dependency,
+  so the next `pixi run ...` or `pixi install` re-syncs the environment and
+  updates `pixi.lock`.
+- **Dev tool or Python version:** edit `pixi.toml` (`[dependencies]` or
+  `[feature.dev.dependencies]`), then run `pixi install`.
+- **Source code:** changes under `src/kbbi_extract/` are live immediately
+  because the package is installed in editable mode.
+- **Entry points / packaging metadata:** run `pixi install` after changing
+  `[project.scripts]` or other build metadata to regenerate the console
+  script.
+
+Commit `pixi.lock` whenever dependency resolution changes.
+
 ## Reproduce from scratch
 
 The detailed walk-through is in [`docs/reverse-engineering.md`](docs/reverse-engineering.md).
