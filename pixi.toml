@@ -7,9 +7,8 @@ version = "0.1.0"
 
 [dependencies]
 python = "3.12.*"
-
-[pypi-dependencies]
-kbbi-extract = { path = ".", editable = true }
+pycryptodome = ">=3.20"
+openjdk = ">=17"
 
 [feature.dev.dependencies]
 pytest = ">=8"
@@ -18,8 +17,11 @@ pytest = ">=8"
 default = { features = ["dev"], solve-group = "default" }
 
 [tasks]
+setup-apktool = "python scripts/setup_apktool.py"
+unpack = "python scripts/unpack_xapk.py"
+decode = "python scripts/decode_apk.py"
 decrypt = "python scripts/decrypt_dict.py"
 extract = "python scripts/extract_dict.py"
-test = "python -m pytest"
-key = "python -m kbbi_extract key"
-info = "python -m kbbi_extract info"
+test = "python -m pytest -q"
+key = "python scripts/kbbi_extract.py key"
+info = "python scripts/kbbi_extract.py info"

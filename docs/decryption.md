@@ -97,10 +97,10 @@ pixi run decrypt
 
 # All blocks, explicit input and output
 DICTDATA=artifacts/decoded/assets/composeResources/kbbi6.composeapp.generated.resources/files/dictdata
-pixi run kbbi-extract decrypt "$DICTDATA" -o output/dictdata
+pixi run python scripts/decrypt_dict.py "$DICTDATA" -o output/dictdata
 
 # Keep the intermediate Salsa20 plaintext (GZIP bytes)
-pixi run kbbi-extract decrypt --raw-gzip -o output/raw-gzip
+pixi run python scripts/decrypt_dict.py --raw-gzip -o output/raw-gzip
 
 # Print key and nonce only
 pixi run key
@@ -115,8 +115,9 @@ non-encrypted dictionary file into the same output directory:
 | `--raw-gzip` | `output/dictdata/acu_desc_N.s.gz` (Salsa20 plaintext) plus the same plaintext tables |
 
 Existing files are skipped unless `--force` is passed.  The combined output
-directory is self-contained: `pixi run kbbi-extract info output/dictdata` and
-`pixi run kbbi-extract extract output/dictdata` work directly from it.
+directory is self-contained:
+`pixi run python scripts/kbbi_extract.py info output/dictdata` and
+`pixi run python scripts/extract_dict.py output/dictdata` work directly from it.
 
 ## Verification
 

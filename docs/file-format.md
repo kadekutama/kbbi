@@ -209,7 +209,7 @@ The Python parser follows the app’s display semantics:
    the current section.
 6. `255` flushes the final definition and ends the entry.
 
-The output of `kbbi-extract extract` is a JSON object per entry:
+The output of `python scripts/extract_dict.py` is a JSON object per entry:
 
 ```json
 {

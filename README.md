@@ -28,22 +28,22 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 ```text
 .
 ├── README.md
-├── pixi.toml                  # project environment + tasks
+├── pixi.toml                  # the only project manifest
 ├── pixi.lock                  # pinned environment
-├── pyproject.toml             # package metadata
 ├── .gitignore
 ├── src/kbbi_extract/          # reusable Python package
 │   ├── crypto.py              # key derivation, Salsa20, GZIP
 │   ├── format.py              # ValueReader + CAV parser
 │   ├── dictionary.py          # word list, offsets, entry parser
-│   ├── cli.py                 # kbbi-extract command
+│   ├── cli.py                 # CLI implementation
 │   └── paths.py               # default source-checkout paths
 ├── scripts/
 │   ├── decrypt_dict.py        # decrypt all acu_desc_*.s files
 │   ├── extract_dict.py        # extract entries to JSON/JSONL
-│   ├── unpack_xapk.sh
-│   ├── decode_apk.sh
-│   └── setup_apktool.sh
+│   ├── kbbi_extract.py        # run the CLI from the source tree
+│   ├── unpack_xapk.py         # stdlib zip extraction
+│   ├── decode_apk.py          # manifest-aware APKTool wrapper
+│   └── setup_apktool.py       # stdlib APKTool downloader
 ├── tests/
 ├── docs/
 │   ├── reverse-engineering.md
@@ -55,16 +55,15 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 └── output/                    # generated data (gitignored)
 ```
 
-`pixi.toml` owns the environment and tasks.  `pyproject.toml` is not
-redundant: pixi installs the local package in editable mode from it, which
-provides the `kbbi-extract` console command and the PyCryptodome dependency.
-There is no lint dependency; `pytest` is the only dev tool.
+`pixi.toml` is the single project manifest.  It provides Python,
+PyCryptodome, OpenJDK, pytest, and every task.  The scripts add `src/` to
+`sys.path` themselves, so there is no package installation step and no second
+project manager.
 
 ## Quick start
 
 The project uses a [pixi](https://pixi.sh/) workspace.  Create the environment
-once; it installs Python 3.12, PyCryptodome, the local `kbbi_extract` package
-in editable mode, and the dev tools:
+once; it installs Python 3.12, PyCryptodome, OpenJDK, and pytest:
 
 ```bash
 pixi install
@@ -105,34 +104,33 @@ pixi run info
 
 # Keep the intermediate GZIP stream instead of the CAV payload
 DICTDATA=artifacts/decoded/assets/composeResources/kbbi6.composeapp.generated.resources/files/dictdata
-pixi run kbbi-extract decrypt "$DICTDATA" --raw-gzip -o output/raw
+pixi run python scripts/decrypt_dict.py "$DICTDATA" --raw-gzip -o output/raw
 
 # A few entries as pretty JSON on stdout
-pixi run kbbi-extract extract --limit 3 --format json
+pixi run python scripts/extract_dict.py --limit 3 --format json
 
 # One headword
-pixi run kbbi-extract extract --word rumah --format json -o output/rumah.json
+pixi run python scripts/extract_dict.py --word rumah --format json -o output/rumah.json
+
+# Any other CLI subcommand or option
+pixi run python scripts/kbbi_extract.py info output/dictdata
 ```
 
-The editable install makes `kbbi-extract` available inside the pixi
-environment, so `pixi run kbbi-extract ...` is equivalent to
-`pixi run python -m kbbi_extract ...`.
+The wrapper scripts add `src/` to the import path, so no package installation
+is required.
 
 ## Changing dependencies
 
-- **Runtime Python dependency:** add it to `[project.dependencies]` in
-  `pyproject.toml`. Pixi treats the local package as an editable dependency,
-  so the next `pixi run ...` or `pixi install` re-syncs the environment and
-  updates `pixi.lock`.
-- **Dev tool or Python version:** edit `pixi.toml` (`[dependencies]` or
-  `[feature.dev.dependencies]`), then run `pixi install`.
-- **Source code:** changes under `src/kbbi_extract/` are live immediately
-  because the package is installed in editable mode.
-- **Entry points / packaging metadata:** run `pixi install` after changing
-  `[project.scripts]` or other build metadata to regenerate the console
-  script.
+Everything is in `pixi.toml`:
 
-Commit `pixi.lock` whenever dependency resolution changes.
+- **Runtime dependency:** add it to `[dependencies]`, then run
+  `pixi install` (or let the next `pixi run ...` re-sync).
+- **Dev tool:** add it to `[feature.dev.dependencies]`.
+- **Task:** add it under `[tasks]`.
+
+`pixi.lock` updates automatically; commit it with the manifest change.
+Source edits under `src/kbbi_extract/` need no reinstall because the wrapper
+scripts always import from `src/`.
 
 ## Reproduce from scratch
 
@@ -148,13 +146,13 @@ mkdir -p artifacts/input
 cp /path/to/kbbi.xapk artifacts/input/kbbi.xapk
 
 # 2. Download APKTool 3.0.3 (once)
-scripts/setup_apktool.sh
+pixi run setup-apktool
 
-# 3. Unpack the XAPK
-scripts/unpack_xapk.sh
+# 3. Unpack the XAPK (Python stdlib, no unzip binary needed)
+pixi run unpack
 
 # 4. Decode the base APK with the resource-bearing splits
-scripts/decode_apk.sh
+pixi run decode
 
 # 5. Decrypt and extract
 pixi run decrypt
@@ -191,8 +189,9 @@ See [`docs/decryption.md`](docs/decryption.md) for the exact derivation and
 A database-only update normally keeps the same code and crypto, so the
 pipeline is reusable:
 
-- `decode_apk.sh` reads the package name and base APK from `manifest.json`,
-  and automatically selects the non-ABI `config.*` splits.
+- `decode_apk.py` reads the package name and base APK from `manifest.json`,
+  and automatically selects the non-ABI `config.*` splits.  Use `--package`,
+  `--base`, or `--unpacked` to override detection.
 - The decryptor discovers `files/dictdata` dynamically, so a changed
   generated-resources package name (for example `kbbi6` → `kbbi7`) is fine.
 - Block count, word count, offsets, and entry contents are read from the new

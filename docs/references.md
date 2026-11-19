@@ -85,9 +85,9 @@ decode step.  The artifacts directory is intentionally not tracked by Git.
 ## Regenerating the local reference tree
 
 ```bash
-scripts/setup_apktool.sh
-scripts/unpack_xapk.sh
-scripts/decode_apk.sh
+pixi run setup-apktool
+pixi run unpack
+pixi run decode
 ```
 
 The reference paths then exist under `artifacts/decoded/`.  If line numbers do

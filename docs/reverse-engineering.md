@@ -36,9 +36,9 @@ The exact versions used for this write-up:
 | Tool | Version |
 | --- | --- |
 | APKTool | 3.0.3 |
-| Java | OpenJDK 26.0.2.1 |
+| Java | OpenJDK 27 (pixi project environment) |
 | Python | 3.12.16 (pixi project environment) |
-| PyCryptodome | 4.5.0 (pixi project environment) |
+| PyCryptodome | 4.4.0 (pixi project environment) |
 | jadx | optional, for cross-checking |
 | APKEditor | optional, for splitting/merging experiments |
 
@@ -361,9 +361,9 @@ From the repository root:
 
 ```bash
 pixi install
-scripts/setup_apktool.sh
-scripts/unpack_xapk.sh
-scripts/decode_apk.sh
+pixi run setup-apktool
+pixi run unpack
+pixi run decode
 pixi run decrypt
 pixi run extract
 ```
@@ -379,9 +379,9 @@ plaintext: 435 copied, 0 skipped
 
 The extraction pipeline is data-driven where it matters:
 
-- `decode_apk.sh` reads `manifest.json` for the package name and base APK,
-  and auto-selects the non-ABI `config.*` splits.  Use `PACKAGE`, `BASE_APK`,
-  `BASE_NAME`, or `XAPK_DIR` to override detection.
+- `decode_apk.py` reads `manifest.json` for the package name and base APK,
+  and auto-selects the non-ABI `config.*` splits.  Use `--package`, `--base`,
+  or `--unpacked` to override detection.
 - The CLI discovers `<decoded>/assets/composeResources/*/files/dictdata`, so
   a renamed generated-resources package does not break the default path.
 - Block count, word count, offsets, and entries are parsed from the new
