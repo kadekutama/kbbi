@@ -1,0 +1,13 @@
+flowchart TD
+    A["a1/j0.smali pswitch_1"] --> B["seed = (-0x1ad25f52L shl 31) or 0x3ade68b1L"]
+    A --> C["h = 1; for c in 'android.text.SpannableStringBuilder':<br/>h = h * 0x2f + (c.code xor 0x309)"]
+    B --> D["hex16(seed) = f296d0573ade68b1"]
+    C --> E["hex16(h) = f079cbdea460149e"]
+    P["prefix ffef...d31e"] --> F["key_hex"]
+    D --> F
+    E --> F
+    S["suffix d4036e"] --> F
+    F --> G["hex decode"]
+    G --> H["32-byte Salsa20 key"]
+    N["a1/j0 pswitch_0<br/>fa1f5b7694c268fc"] --> I["hex decode"]
+    I --> J["8-byte nonce"]

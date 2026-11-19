@@ -1,0 +1,10 @@
+flowchart LR
+    A["acu_nilai.txt<br/>varint count + uint8 length + UTF-8"] --> W["word list"]
+    B["acu_offlens.txt<br/>varint count + delta encoding"] --> O["block/offset index"]
+    C["acu_desc_N.s<br/>Salsa20 ciphertext"] --> D["GZIP decompress"]
+    D --> E["CAV byte stream"]
+    O --> F["seek entry offset"]
+    E --> F
+    W --> P["entry parser"]
+    F --> P
+    P --> J["JSON / JSONL"]

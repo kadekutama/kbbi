@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+env/
+dist/
+build/
+
+# Local reverse-engineering artifacts (large, reproducible)
+artifacts/*
+!artifacts/README.md
+
+# Generated output
+output/
+*.xapk
+*.apk
+*.apks
+*.apkm
+*.jar
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
