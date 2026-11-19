@@ -366,7 +366,11 @@ pixi run unpack
 pixi run decode
 pixi run decrypt
 pixi run extract
+pixi run db
 ```
+
+The last command builds the normalized SQLite database described in
+[`database.md`](database.md).
 
 Expected decryptor summary:
 

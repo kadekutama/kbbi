@@ -82,6 +82,15 @@ decode step.  The artifacts directory is intentionally not tracked by Git.
 - [GZIP RFC 1952](https://www.rfc-editor.org/rfc/rfc1952)
 - [Salsa20 specification](https://cr.yp.to/snuffle/spec.pdf)
 
+## Project implementation
+
+| Path | Purpose |
+| --- | --- |
+| `src/kbbi_extract/structured.py` | CAV → subentries, definitions, labels, examples, relations |
+| `src/kbbi_extract/database.py` | Normalized SQLite schema and bulk loader |
+| `scripts/build_db.py` | CLI wrapper for `pixi run db` |
+| `docs/database.md` | Schema rationale and query recipes |
+
 ## Regenerating the local reference tree
 
 ```bash
