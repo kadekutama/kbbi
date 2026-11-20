@@ -10,7 +10,7 @@ queryable `kbbi.sqlite`.
 
 | Item | Value |
 | --- | --- |
-| Input | `artifacts/input/kbbi.xapk` (APKPure bundle, not in git) |
+| Input | `artifacts/input/kbbi.xapk` (APKPure bundle, committed in-repo) |
 | Package | `yuku.kbbi5` · KBBI 6.2.0 (versionCode 640) |
 | Headwords | 196,195 |
 | Encrypted blocks | 28 (`acu_desc_0.s` … `acu_desc_27.s`) |
@@ -37,8 +37,11 @@ queryable `kbbi.sqlite`.
   `kata_hari_ini`, `kata_tahun_ini`, `tentang`, `dokumen`, `info`.
 - `output/dokumen/` — PDF/font assets copied next to the database.
 
-None of the above is committed to git (see [`.gitignore`](.gitignore));
-everything under `output/` and `artifacts/` is reproducible locally.
+None of the above is small — the decoded tree plus outputs are ~250 MiB — but
+everything under `output/` and `artifacts/` is committed so readers can
+inspect the data without running the pipeline. To rebuild from scratch, delete
+the generated directories (keeping `artifacts/input/kbbi.xapk`) and re-run
+the steps below.
 
 ## Requirements
 
@@ -56,6 +59,9 @@ pixi install
 # 1. Put the bundle where the scripts expect it
 mkdir -p artifacts/input
 cp /path/to/kbbi.xapk artifacts/input/kbbi.xapk
+# Source if you need to re-download it yourself:
+# https://apkpure.com/id/kbbi-offline/yuku.kbbi5
+# (APKPure XAPK download page; the repo already vendors the 6.2.0 file used here)
 
 # 2. Download APKTool 3.0.3 (once, checksum-verified)
 pixi run setup-apktool

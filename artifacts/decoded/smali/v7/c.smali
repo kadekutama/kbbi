@@ -1,0 +1,163 @@
+.class public abstract Lv7/c;
+.super Ljava/lang/Object;
+.source "r8-map-id-a98501b65c5e6d4e8f777637d52f26caceff287c5052147508d30736d0359f7f"
+
+
+# static fields
+.field public static final a:[Lv6/c;
+
+.field public static final b:Lf4/s;
+
+.field public static final c:Lf4/s;
+
+
+# direct methods
+.method static synthetic constructor <clinit>()V
+    .locals 3
+
+    .line 1
+    const/4 v0, 0x0
+
+    .line 2
+    new-array v0, v0, [Lv6/c;
+
+    .line 3
+    .line 4
+    sput-object v0, Lv7/c;->a:[Lv6/c;
+
+    .line 5
+    .line 6
+    new-instance v0, Lf4/s;
+
+    .line 7
+    .line 8
+    const-string v1, "NULL"
+
+    .line 9
+    .line 10
+    const/4 v2, 0x1
+
+    .line 11
+    invoke-direct {v0, v1, v2}, Lf4/s;-><init>(Ljava/lang/String;I)V
+
+    .line 12
+    .line 13
+    .line 14
+    sput-object v0, Lv7/c;->b:Lf4/s;
+
+    .line 15
+    .line 16
+    new-instance v0, Lf4/s;
+
+    .line 17
+    .line 18
+    const-string v1, "UNINITIALIZED"
+
+    .line 19
+    .line 20
+    invoke-direct {v0, v1, v2}, Lf4/s;-><init>(Ljava/lang/String;I)V
+
+    .line 21
+    .line 22
+    .line 23
+    sput-object v0, Lv7/c;->c:Lf4/s;
+
+    .line 24
+    .line 25
+    return-void
+.end method
+
+.method public static final a(Lv6/g;Ljava/lang/Object;Ljava/lang/Object;Le7/p;Lv6/c;)Ljava/lang/Object;
+    .locals 2
+
+    .line 1
+    invoke-static {p0, p2}, Lw7/b;->p(Lv6/g;Ljava/lang/Object;)Ljava/lang/Object;
+
+    .line 2
+    .line 3
+    .line 4
+    move-result-object p2
+
+    .line 5
+    :try_start_0
+    new-instance v0, Lv7/x;
+
+    .line 6
+    .line 7
+    invoke-direct {v0, p4, p0}, Lv7/x;-><init>(Lv6/c;Lv6/g;)V
+
+    .line 8
+    .line 9
+    .line 10
+    if-nez p3, :cond_0
+
+    .line 11
+    .line 12
+    invoke-static {p3, p1, v0}, Lu3/a;->p(Le7/p;Ljava/lang/Object;Lv6/c;)Ljava/lang/Object;
+
+    .line 13
+    .line 14
+    .line 15
+    move-result-object p1
+
+    .line 16
+    goto :goto_0
+
+    .line 17
+    :catchall_0
+    move-exception p1
+
+    .line 18
+    goto :goto_1
+
+    .line 19
+    :cond_0
+    const/4 v1, 0x2
+
+    .line 20
+    invoke-static {v1, p3}, Lf7/w;->c(ILjava/lang/Object;)V
+
+    .line 21
+    .line 22
+    .line 23
+    invoke-interface {p3, p1, v0}, Le7/p;->d(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+    .line 24
+    .line 25
+    .line 26
+    move-result-object p1
+    :try_end_0
+    .catchall {:try_start_0 .. :try_end_0} :catchall_0
+
+    .line 27
+    :goto_0
+    invoke-static {p0, p2}, Lw7/b;->i(Lv6/g;Ljava/lang/Object;)V
+
+    .line 28
+    .line 29
+    .line 30
+    sget-object p0, Lw6/a;->d:Lw6/a;
+
+    .line 31
+    .line 32
+    if-ne p1, p0, :cond_1
+
+    .line 33
+    .line 34
+    invoke-virtual {p4}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
+
+    .line 35
+    .line 36
+    .line 37
+    :cond_1
+    return-object p1
+
+    .line 38
+    :goto_1
+    invoke-static {p0, p2}, Lw7/b;->i(Lv6/g;Ljava/lang/Object;)V
+
+    .line 39
+    .line 40
+    .line 41
+    throw p1
+.end method

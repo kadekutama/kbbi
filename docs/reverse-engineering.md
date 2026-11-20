@@ -13,7 +13,7 @@ If you only want to **run** the pipeline, skip to
 
 | Field | Value |
 | --- | --- |
-| Input | `kbbi.xapk` (APKPure XAPK) |
+| Input | `kbbi.xapk` (APKPure XAPK — [download page](https://apkpure.com/id/kbbi-offline/yuku.kbbi5), vendored at `artifacts/input/kbbi.xapk`) |
 | Package | `yuku.kbbi5` |
 | App name | KBBI |
 | Version | 6.2.0 |
@@ -53,7 +53,9 @@ APKTool 3.0.2 or newer is required for split-APK library loading. The older
 ## 3. Unpack the XAPK
 
 The repo wrapper uses only the Python standard library (plus a path-traversal
-guard), so no `unzip` binary is needed:
+guard), so no `unzip` binary is needed. It reads `artifacts/input/kbbi.xapk`
+by default — originally fetched from the
+[APKPure KBBI page](https://apkpure.com/id/kbbi-offline/yuku.kbbi5):
 
 ```bash
 pixi run unpack

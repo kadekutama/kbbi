@@ -186,11 +186,11 @@ ORDER BY l.id, a.nomor, c.urutan;
 
 | Path | Description | Committed? |
 | --- | --- | --- |
-| `output/dictdata/` | 28 `.cav` + 435 plaintext files | No (reproducible) |
-| `output/kbbi.jsonl` | 196,195 flat entries | No |
-| `output/kbbi.sqlite` | Customer database | No |
-| `output/dokumen/` | PDF + font license | No |
-| `artifacts/` | XAPK, APKTool jar, unpacked + decoded tree, logs | No (except `README.md`) |
+| `output/dictdata/` | 28 `.cav` + 435 plaintext files | Yes |
+| `output/kbbi.jsonl` | 196,195 flat entries | Yes |
+| `output/kbbi.sqlite` | Customer database | Yes |
+| `output/dokumen/` | PDF + font license | Yes |
+| `artifacts/` | XAPK, APKTool jar, unpacked + decoded tree, logs | Yes (input + tools + unpacked + decoded) |
 
 ## Troubleshooting
 

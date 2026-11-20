@@ -11,19 +11,6 @@ __pycache__/
 .venv/
 env/
 dist/
-build/
-
-# Local reverse-engineering artifacts (large, reproducible)
-artifacts/*
-!artifacts/README.md
-
-# Generated output
-output/
-*.xapk
-*.apk
-*.apks
-*.apkm
-*.jar
 
 # Editors / OS
 .DS_Store

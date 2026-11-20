@@ -1,0 +1,16 @@
+^AdmAdministrasi dan KepegawaianBudAgama BuddhaHinAgama HinduIslAgama IslamKatAgama KatolikKrisAgama KristenAnatAnatomiAntrAntropologiArk	ArkeologiArs
+ArsitekturAstrol	AstrologiAstron	AstronomiBioBiologiBotBotaniBuBudayaDem	DemografiEkolEkologiEkEkonomi dan KeuanganElElektronikaEnt
+EntomologiFarFarmasi dan FarmakologiFilolFilologiFilFilsafatFisFisikaFt	FotografiGeof	GeofisikaGeoGeografi dan GeologiGrafGrafikaHid	HidrologiHidmHidrometeorologiHukHukumGz	Ilmu GiziKomIlmu KomunikasiPangIlmu PanganPust!Ilmu Perpustakaan dan DokumentasiTn
+Ilmu TanahDirgKedirgantaraanDokKedokteran dan FisiologiHut	KehutananMilKemiliteranPls
+KepolisianKes	KesehatanSenKesenianKeuKeuanganKimKimiaKompKomputerLgk
+LingkunganLing
+LinguistikMan	ManajemenMat
+MatematikaMekMekanikaMetal	MetalurgiMetMeteorologiMikMikologiMin
+MineralogiMusMusikNanotekNanoteknologiOlrOlahragaOr
+OrnitologiOsnOseanografiOtoOtomotifPrw
+PariwisataLay	PelayaranDik
+PendidikanTerbPenerbanganDagPerdaganganFilm	PerfilmanHot
+PerhotelanHubPerhubunganIkn	PerikananIdtPerindustrian dan KerajinanKap
+PerkapalanHan
+PertahananTan	PertanianTern
+PeternakanPetPetrologi dan MigasPolPolitik dan PemerintahanPrmPramukaPsi	PsikologiRpbRupabumiSasSastraSos	SosiologiStat	StatistikTasTasawufTbg	Tata BogaTbsTata BusanaTrs	Tata RiasTekTeknikTambTeknik PertambanganSipTeknik SipilIfTeknologi InformasiTelekomTelekomunikasiTrpTransportasiZoolZoologi
