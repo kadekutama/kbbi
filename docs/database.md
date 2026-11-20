@@ -120,7 +120,7 @@ belong to a specific meaning.
 | `lema_id` | References `lema.id` |
 | `jenis` | Relation type |
 | `target` | Related word |
-| `konteks` | Context for `rujukan`, otherwise empty |
+| `konteks` | Context for `bentuk_tidak_baku`, `lihat`, or `rujukan`; empty for other types |
 
 Relation types: `turunan`, `gabungan_kata`, `peribahasa`, `kiasan`, `varian`,
 `dasar`, `bentuk_tidak_baku`, `lihat`, `rujukan`.
@@ -233,7 +233,7 @@ SELECT tahun, judul FROM kata_tahun_ini ORDER BY tahun;
 | --- | ---: |
 | `kata` | 196,195 |
 | `lema` | 211,473 |
-| `arti` | 233,820 |
+| `arti` | 233,579 |
 | `arti_metadata` | 19,823 |
 | `contoh` | 47,792 |
 | `relasi` | 116,439 |

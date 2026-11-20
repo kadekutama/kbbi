@@ -304,7 +304,11 @@ def _subentry_relations(
         kind = RELATION_NAMES.get(relation.type)
         if kind is None:
             continue
-        context = relation.context if relation.type == "cross_reference" else ""
+        context = (
+            relation.context
+            if relation.type in {"cross_reference", "nonstandard_form", "see"}
+            else ""
+        )
         rows.append((kind, relation.target_text, context or ""))
     return rows
 

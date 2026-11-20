@@ -40,6 +40,7 @@ def test_subentry_labels_examples_and_relations() -> None:
         "compound",
     ]
     assert [relation.target_text for relation in subentry.relations] == ["lang", "elang alap"]
+    assert subentry.relations[0].context == "bentuk tidak baku:"
 
 
 def test_numbered_definitions_are_split() -> None:

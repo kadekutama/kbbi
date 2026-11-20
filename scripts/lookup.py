@@ -131,7 +131,11 @@ def _print_word(word: dict) -> None:
                 print(f"      contoh: {example['teks']}")
 
         for relation in lemma["relasi"]:
-            suffix = f" ({relation['konteks']})" if relation["konteks"] else ""
+            suffix = (
+                f" ({relation['konteks']})"
+                if relation["jenis"] == "rujukan" and relation["konteks"]
+                else ""
+            )
             print(f"      {relation['jenis']}: {relation['target']}{suffix}")
 
 

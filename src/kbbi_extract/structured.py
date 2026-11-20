@@ -129,6 +129,10 @@ def _target_word(words: list[str], number: int) -> tuple[int | None, str]:
     return None, f"#{number}"
 
 
+def _clean_context(value: str) -> str:
+    return re.sub(r"[\s;,]+$", "", _clean_text(value))
+
+
 def _relation_type(context: str) -> str:
     value = context.casefold().strip()
     if value.startswith("bentuk tidak baku"):
@@ -209,6 +213,7 @@ class _EntryParser:
 
     def _start_definition(self, number: int | None) -> None:
         self._finish_definition()
+        self.context = ""
         self.definition_counter += 1
         self.current_definition = Definition(
             ordinal=self.definition_counter,
@@ -223,6 +228,7 @@ class _EntryParser:
         if self.current_definition is None and not text.strip():
             return
         definition = self._ensure_definition()
+        self.context = ""
         if definition.rich and definition.rich[-1].get("type") == "text":
             definition.rich[-1]["text"] += text
         else:
@@ -235,6 +241,7 @@ class _EntryParser:
 
     def _add_label(self, kind: str, code: str, value: str) -> None:
         definition = self._ensure_definition()
+        self.context = ""
         definition.labels.append(Label(kind=kind, code=code, value=value))
         definition.rich.append(
             {"type": "label", "kind": kind, "code": code, "value": value}
@@ -257,7 +264,7 @@ class _EntryParser:
                 type=relation_type,
                 target_entry_id=target_id,
                 target_text=target_text,
-                context=_clean_text(context),
+                context=_clean_context(context),
                 ordinal=self.relation_counter,
                 definition_ordinal=definition_ordinal,
             )
@@ -318,6 +325,15 @@ class _EntryParser:
         if stripped.casefold().startswith(("bentuk tidak baku", "lihat", "bandingkan")):
             self._append_context(text)
             return
+
+        if self.context:
+            # Separators between references belong to the reference list, not
+            # to the definition.  A real definition token ends the list.
+            if stripped and not re.fullmatch(r"[\s;:,.،]*", stripped):
+                self.context = ""
+            else:
+                self._append_context(text)
+                return
 
         position = 0
         for match in NUMBER_MARKER.finditer(text):
@@ -423,7 +439,6 @@ class _EntryParser:
         if code == 40:
             if self.section is not None:
                 self._add_relation(self.section, record.number)
-                self.context = ""
             else:
                 relation_type = _relation_type(self.context)
                 definition_ordinal = (
@@ -435,7 +450,6 @@ class _EntryParser:
                     context=self.context,
                     definition_ordinal=definition_ordinal,
                 )
-                self.context = ""
             return
 
         if code == 255:
