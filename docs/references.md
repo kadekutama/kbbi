@@ -87,10 +87,10 @@ decode step.  The artifacts directory is intentionally not tracked by Git.
 | Path | Purpose |
 | --- | --- |
 | `src/kbbi_extract/structured.py` | CAV → subentries, definitions, labels, examples, relations |
-| `src/kbbi_extract/database.py` | Normalized SQLite schema and bulk loader |
+| `src/kbbi_extract/customer_db.py` | Customer-facing single-table SQLite builder |
 | `scripts/build_db.py` | CLI wrapper for `pixi run db` |
-| `scripts/lookup.py` | Readable lookup through the `v_words` view |
-| `docs/database.md` | Schema rationale and query recipes |
+| `scripts/lookup.py` | Readable lookup through the `kbbi` table |
+| `docs/database.md` | Customer database guide and column dictionary |
 
 ## Regenerating the local reference tree
 

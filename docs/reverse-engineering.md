@@ -369,7 +369,7 @@ pixi run extract
 pixi run db
 ```
 
-The last command builds the normalized SQLite database described in
+The last command builds the customer-facing SQLite database described in
 [`database.md`](database.md).
 
 Expected decryptor summary:

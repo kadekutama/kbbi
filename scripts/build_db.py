@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the normalized SQLite database from the combined dictdata output."""
+"""Build the customer-facing SQLite database from the combined dictdata output."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from kbbi_extract.database import build_database  # noqa: E402
+from kbbi_extract.customer_db import build_database  # noqa: E402
 from kbbi_extract.errors import KbbiError  # noqa: E402
 from kbbi_extract.paths import DEFAULT_DICTDATA, DEFAULT_OUTPUT_DIR, find_dictdata  # noqa: E402
 
