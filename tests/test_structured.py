@@ -85,3 +85,48 @@ def test_parent_reference_is_attached_to_next_subentry() -> None:
 
     assert parsed.subentries[0].parent_entry_id == 1
     assert parsed.subentries[0].definitions[0].labels[0].value == "Adm"
+
+
+def test_sequential_reference_groups_keep_separate_contexts() -> None:
+    # akor-like: "bentuk tidak baku: A" then "bentuk tidak baku dari B".
+    # The second group must not inherit the first group's context.
+    words = ["akor", "akur", "x"]
+    records = [
+        CavRecord(3, text="a.kor (1)"),
+        CavRecord(0, text="\n"),
+        CavRecord(0, text="bentuk tidak baku: "),
+        CavRecord(40, number=2),
+        CavRecord(0, text="\n"),
+        CavRecord(0, text="bentuk tidak baku dari "),
+        CavRecord(40, number=3),
+        CavRecord(0, text="\n"),
+        CavRecord(255),
+    ]
+
+    parsed = parse_entry("akor", records, words)
+    relations = parsed.subentries[0].relations
+
+    assert [r.target_text for r in relations] == ["akur", "x"]
+    assert relations[0].context == "bentuk tidak baku:"
+    assert relations[1].context == "bentuk tidak baku dari"
+
+
+def test_semicolon_list_shares_one_context() -> None:
+    words = ["adjektiva", "a", "b"]
+    records = [
+        CavRecord(3, text="ad.jek.ti.va"),
+        CavRecord(0, text="\n"),
+        CavRecord(0, text="bentuk tidak baku: "),
+        CavRecord(40, number=2),
+        CavRecord(0, text="; "),
+        CavRecord(40, number=3),
+        CavRecord(0, text="\n"),
+        CavRecord(255),
+    ]
+
+    parsed = parse_entry("adjektiva", records, words)
+    relations = parsed.subentries[0].relations
+
+    assert [r.target_text for r in relations] == ["a", "b"]
+    assert relations[0].context == "bentuk tidak baku:"
+    assert relations[1].context == "bentuk tidak baku:"

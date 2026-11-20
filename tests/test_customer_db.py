@@ -111,5 +111,54 @@ def test_build_customer_database(tmp_path: Path) -> None:
         assert (database.parent / "dokumen" / "docs" / "panduan.txt").read_text(
             encoding="utf-8"
         ) == "panduan"
+
+        # Optional text columns are NOT NULL with '' defaults, never NULL.
+        for table, column in [
+            ("lema", "pelafalan"),
+            ("lema", "etimologi"),
+            ("lema", "induk"),
+            ("relasi", "konteks"),
+            ("kata_tahun_ini", "judul"),
+            ("tentang", "judul"),
+            ("dokumen", "jenis_media"),
+        ]:
+            nulls = connection.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE {column} IS NULL"  # noqa: S608
+            ).fetchone()[0]
+            assert nulls == 0, f"{table}.{column} contains NULL"
+
+        # homograf stays nullable by design: NULL means "not a numbered homograph".
+        cols = [r[1] for r in connection.execute("PRAGMA table_info(lema)")]
+        assert "homograf" in cols
+    finally:
+        connection.close()
+
+
+def test_json_columns_reject_invalid_json(tmp_path: Path) -> None:
+    import pytest
+
+    from kbbi_extract import customer_db
+
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.executescript(customer_db.SCHEMA)
+
+        connection.execute(
+            "INSERT INTO kata(id, kata) VALUES (1, 'rumah')"
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO lema(id, kata_id, lema) VALUES (1, 1, 'rumah')"
+            )
+            connection.execute(
+                "INSERT INTO arti(id, lema_id, nomor, arti, kelas_kata) "
+                "VALUES (1, 1, 1, 'x', 'not-json')"
+            )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO lema(id, kata_id, lema, pelafalan) "
+                "VALUES (2, 1, 'rumah', NULL)"
+            )
     finally:
         connection.close()

@@ -151,7 +151,12 @@ additional metadata, not missing data.
 3. **Formatting spaces were lost around inline runs.**
    `dari <i>abid</i>` became `dari<i>abid</i>`. Rich text now preserves the
    separating spaces.
-4. **Actual state after fixes:** still 211,473 lemas and 116,439 relations;
+4. **Sequential reference groups merged their contexts.**
+   `bentuk tidak baku: A` followed by `bentuk tidak baku dari B` produced one
+   `konteks` value of `"bentuk tidak baku:\nbentuk tidak baku dari"` (103
+   rows). The parser now resets the context when a new introducer phrase
+   starts a group, while `;`-separated lists still share one context.
+5. **Actual state after fixes:** still 211,473 lemas and 116,439 relations;
    233,579 definitions; all text coverage checks pass.
 
 ## Conclusion

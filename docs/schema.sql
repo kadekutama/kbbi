@@ -6,10 +6,10 @@ CREATE TABLE arti (
     lema_id INTEGER NOT NULL REFERENCES lema(id),
     nomor INTEGER NOT NULL,
     arti TEXT NOT NULL,
-    kelas_kata TEXT NOT NULL DEFAULT '[]',
-    bahasa TEXT NOT NULL DEFAULT '[]',
-    bidang TEXT NOT NULL DEFAULT '[]',
-    ragam TEXT NOT NULL DEFAULT '[]'
+    kelas_kata TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(kelas_kata)),
+    bahasa TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(bahasa)),
+    bidang TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(bidang)),
+    ragam TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(ragam))
 );
 
 -- table: arti_metadata
@@ -31,7 +31,7 @@ CREATE TABLE contoh (
 -- table: dokumen
 CREATE TABLE dokumen (
     berkas TEXT PRIMARY KEY,
-    jenis_media TEXT,
+    jenis_media TEXT NOT NULL,
     ukuran INTEGER NOT NULL
 );
 
@@ -45,11 +45,11 @@ CREATE TABLE info (
 CREATE TABLE kata (
     id INTEGER PRIMARY KEY,
     kata TEXT NOT NULL,
-    jenis TEXT NOT NULL DEFAULT '[]',
-    kelas_kata TEXT NOT NULL DEFAULT '[]',
-    bahasa TEXT NOT NULL DEFAULT '[]',
-    bidang TEXT NOT NULL DEFAULT '[]',
-    ragam TEXT NOT NULL DEFAULT '[]'
+    jenis TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(jenis)),
+    kelas_kata TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(kelas_kata)),
+    bahasa TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(bahasa)),
+    bidang TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(bidang)),
+    ragam TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(ragam))
 );
 
 -- table: kata_hari_ini
@@ -61,7 +61,7 @@ CREATE TABLE kata_hari_ini (
 -- table: kata_tahun_ini
 CREATE TABLE kata_tahun_ini (
     tahun INTEGER PRIMARY KEY,
-    judul TEXT,
+    judul TEXT NOT NULL,
     isi_html TEXT NOT NULL
 );
 
@@ -71,9 +71,9 @@ CREATE TABLE lema (
     kata_id INTEGER NOT NULL REFERENCES kata(id),
     lema TEXT NOT NULL,
     homograf INTEGER,
-    pelafalan TEXT,
-    etimologi TEXT,
-    induk TEXT
+    pelafalan TEXT NOT NULL DEFAULT '',
+    etimologi TEXT NOT NULL DEFAULT '',
+    induk TEXT NOT NULL DEFAULT ''
 );
 
 -- table: relasi
@@ -82,13 +82,13 @@ CREATE TABLE relasi (
     lema_id INTEGER NOT NULL REFERENCES lema(id),
     jenis TEXT NOT NULL,
     target TEXT NOT NULL,
-    konteks TEXT
+    konteks TEXT NOT NULL DEFAULT ''
 );
 
 -- table: tentang
 CREATE TABLE tentang (
     halaman TEXT PRIMARY KEY,
-    judul TEXT,
+    judul TEXT NOT NULL,
     isi_html TEXT NOT NULL
 );
 

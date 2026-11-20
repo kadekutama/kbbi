@@ -73,45 +73,49 @@ Companion tables (`kata_hari_ini`, `kata_tahun_ini`, `tentang`, `dokumen`,
 
 ### `kata` — headwords
 
-| Column | Meaning |
-| --- | --- |
-| `id` | Simple integer ID |
-| `kata` | Headword (`aba`, `elang`, `administrasi umum`) |
-| `jenis` | JSON array of entry types, e.g. `["Kata Dasar"]` |
-| `kelas_kata` | JSON array of class names, e.g. `["Nomina", "Verba"]` |
-| `bahasa` | JSON array of source-language names |
-| `bidang` | JSON array of subject fields |
-| `ragam` | JSON array of register names |
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `id` | INTEGER PK | Simple integer ID |
+| `kata` | TEXT NOT NULL | Headword (`aba`, `elang`, `administrasi umum`) |
+| `jenis` | JSON array, NOT NULL | Entry types, e.g. `["Kata Dasar"]` |
+| `kelas_kata` | JSON array, NOT NULL | Class names, e.g. `["Nomina", "Verba"]` |
+| `bahasa` | JSON array, NOT NULL | Source-language names |
+| `bidang` | JSON array, NOT NULL | Subject fields |
+| `ragam` | JSON array, NOT NULL | Register names |
 
 These categories come from the app’s own category files, so the home and
 category screens keep their original membership.
 
 ### `lema` — subentries/page blocks
 
-| Column | Meaning |
-| --- | --- |
-| `id` | Simple integer ID, also the page order |
-| `kata_id` | References `kata.id` |
-| `lema` | Display lemma with syllable dots, without the `(n)` suffix (`a.ba`, `e.lang`) |
-| `homograf` | Homograph number |
-| `pelafalan` | Pronunciation (`êlang`) |
-| `etimologi` | Etymology |
-| `induk` | Parent headword for subentries (`administrasi` for `administrasi umum`) |
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `id` | INTEGER PK | Simple integer ID, also the page order |
+| `kata_id` | INTEGER NOT NULL | References `kata.id` |
+| `lema` | TEXT NOT NULL | Display lemma with syllable dots, without the `(n)` suffix (`a.ba`, `e.lang`) |
+| `homograf` | INTEGER, nullable | Homograph number; NULL means "not a numbered homograph" |
+| `pelafalan` | TEXT NOT NULL DEFAULT `''` | Pronunciation (`êlang`); `''` = none |
+| `etimologi` | TEXT NOT NULL DEFAULT `''` | Etymology; `''` = none |
+| `induk` | TEXT NOT NULL DEFAULT `''` | Parent headword for subentries (`administrasi` for `administrasi umum`); `''` = none |
+
+`homograf` is the only legitimately nullable column in the core tables: NULL
+and "no number" are the same fact here. Every other text column is `NOT NULL`,
+using `''` for "absent", so readers never have to wonder what NULL means.
 
 A word with five lemas — like `aba` — has one `kata` row and five `lema` rows.
 
 ### `arti` — meanings
 
-| Column | Meaning |
-| --- | --- |
-| `id` | Simple integer ID |
-| `lema_id` | References `lema.id` |
-| `nomor` | Definition number inside the lemma |
-| `arti` | One definition, with labels and inline formatting |
-| `kelas_kata` | JSON array of class names for this definition |
-| `bahasa` | JSON array of source languages for this definition |
-| `bidang` | JSON array of fields for this definition |
-| `ragam` | JSON array of registers for this definition |
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `id` | INTEGER PK | Simple integer ID |
+| `lema_id` | INTEGER NOT NULL | References `lema.id` |
+| `nomor` | INTEGER NOT NULL | Definition number inside the lemma |
+| `arti` | TEXT NOT NULL | One definition, with labels and inline formatting |
+| `kelas_kata` | JSON array, NOT NULL | Class names for this definition |
+| `bahasa` | JSON array, NOT NULL | Source languages for this definition |
+| `bidang` | JSON array, NOT NULL | Fields for this definition |
+| `ragam` | JSON array, NOT NULL | Registers for this definition |
 
 `arti` uses the same readable markers as the source:
 
@@ -159,19 +163,20 @@ belong to a specific meaning.
 
 ### `relasi` — related words
 
-| Column | Meaning |
-| --- | --- |
-| `id` | Simple integer ID |
-| `lema_id` | References `lema.id` |
-| `jenis` | Relation type |
-| `target` | Related word |
-| `konteks` | Context for `bentuk_tidak_baku`, `lihat`, or `rujukan`; empty for other types |
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `id` | INTEGER PK | Simple integer ID |
+| `lema_id` | INTEGER NOT NULL | References `lema.id` |
+| `jenis` | TEXT NOT NULL | Relation type |
+| `target` | TEXT NOT NULL | Related word |
+| `konteks` | TEXT NOT NULL DEFAULT `''` | One context (`bentuk tidak baku:`) for `bentuk_tidak_baku`/`lihat`; `''` otherwise |
 
 Relation types: `turunan`, `gabungan_kata`, `peribahasa`, `kiasan`, `varian`,
 `dasar`, `bentuk_tidak_baku`, `lihat`, `rujukan`.
 
 One relation per row, so “Gabungan kata” with 27 items is 27 rows, not one
-large cell.
+large cell. Each row carries exactly one context — contexts are never
+concatenated with newlines.
 
 ### Companion tables
 
@@ -188,6 +193,22 @@ large cell.
 live next to the database, not inside the original decoded APK tree.
 
 ## Multiple values are JSON arrays
+
+SQLite has no dedicated JSON storage type: JSON values live in `TEXT`
+columns. Every array column here is guarded by a
+`CHECK (json_valid(...))` constraint, so invalid JSON cannot be inserted,
+and the bundled SQLite (3.54.1, JSON1 included) can query the arrays with
+`json_each`, `json_extract`, and `json_array_length`:
+
+```sql
+-- Which class names exist, and how many definitions use each?
+SELECT value AS kelas_kata, COUNT(*) AS n
+FROM arti, json_each(arti.kelas_kata)
+GROUP BY value ORDER BY n DESC LIMIT 5;
+
+-- All register values actually stored
+SELECT DISTINCT value FROM arti, json_each(arti.ragam);
+```
 
 For example, this is how `aba` looks:
 

@@ -142,6 +142,16 @@ def _relation_type(context: str) -> str:
     return "cross_reference"
 
 
+# Phrases that open a new reference group ("bentuk tidak baku: X",
+# "lihat X").  Anything else (e.g. "; ") continues the current group.
+_CONTEXT_INTRODUCERS = ("bentuk tidak baku", "lihat", "bandingkan")
+
+
+def _starts_new_context(text: str) -> bool:
+    stripped = re.sub(r"^[\s;,]+", "", text).casefold()
+    return stripped.startswith(_CONTEXT_INTRODUCERS)
+
+
 class _EntryParser:
     def __init__(self, word: str, records: Iterable[CavRecord], words: list[str]) -> None:
         self.word = word
@@ -454,6 +464,12 @@ class _EntryParser:
             if self.section is not None:
                 self._add_relation(self.section, record.number)
             else:
+                if self.context.strip(" \t\n\r\f\v;,") and _starts_new_context(
+                    self.pending_text
+                ):
+                    # A new introducer phrase starts a new reference group;
+                    # the previous context was already consumed by its group.
+                    self.context = ""
                 self.context += self.pending_text
                 self.pending_text = ""
                 relation_type = _relation_type(self.context)
