@@ -1,0 +1,35 @@
+erDiagram
+    kata ||--o{ lema : has
+    lema ||--o{ arti : has
+    arti ||--o{ contoh : has
+    arti ||--o{ arti_metadata : has
+    lema ||--o{ relasi : has
+    kata {
+        int id
+        string kata
+    }
+    lema {
+        int id
+        int kata_id
+        string lema
+    }
+    arti {
+        int id
+        int lema_id
+        int nomor
+    }
+    arti_metadata {
+        int id
+        int arti_id
+        string kunci
+    }
+    contoh {
+        int id
+        int arti_id
+        string teks
+    }
+    relasi {
+        int id
+        int lema_id
+        string jenis
+    }

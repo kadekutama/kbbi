@@ -1,0 +1,6 @@
+flowchart LR
+    A["encrypted blocks"] --> B["decrypt to CAV"]
+    B --> C["combined dictdata dir"]
+    C --> D["parse to JSONL"]
+    C --> E["build SQLite"]
+    E --> F["lookup and queries"]

@@ -1,8 +1,12 @@
 # Binary file format
 
-The KBBI app stores the dictionary in a small custom binary format.  This page
-documents the parts needed to decrypt and parse the data.  All multi-byte
+The KBBI app stores the dictionary in a small custom binary format. This page
+documents the parts needed to decrypt and parse the data. All multi-byte
 integers below are big-endian unless the format explicitly says otherwise.
+
+For the runnable steps that use these formats, see
+[extraction.md](extraction.md). For the final tables, see
+[database.md](database.md).
 
 ## Overview
 
@@ -18,18 +22,24 @@ integers below are big-endian unless the format explicitly says otherwise.
 The word list and offset table are paired: entry `i` in `acu_nilai.txt` is
 described at offset `i` in `acu_offlens.txt`.
 
+Source: [`diagrams/04-file-format.mmd`](diagrams/04-file-format.mmd).
+
 ```mermaid
 flowchart LR
-    A["acu_nilai.txt<br/>varint count + uint8 length + UTF-8"] --> W["word list"]
-    B["acu_offlens.txt<br/>varint count + delta encoding"] --> O["block/offset index"]
-    C["acu_desc_N.s<br/>Salsa20 ciphertext"] --> D["GZIP decompress"]
+    A["word list file"] --> W["word list"]
+    B["offset index file"] --> O["block plus offset index"]
+    C["encrypted block file"] --> D["GZIP decompress"]
     D --> E["CAV byte stream"]
-    O --> F["seek entry offset"]
+    O --> F["seek to entry offset"]
     E --> F
     W --> P["entry parser"]
     F --> P
-    P --> J["JSON / JSONL"]
+    P --> J["JSON and JSONL"]
 ```
+
+Concretely: `A` is `acu_nilai.txt` (varint count, then one length byte plus
+UTF-8 per word); `B` is `acu_offlens.txt` (varint count, then delta-encoded
+entries); `C` is one `acu_desc_N.s` file (Salsa20 ciphertext of a GZIP stream).
 
 ## Variable-length integers (`ValueReader`)
 
@@ -44,11 +54,11 @@ The format uses a prefix byte to encode lengths and integer values:
 | `0xfb` | 2 bytes | `(b1 << 8) \| 0x10000 \| b2` |
 | `0xfa` | 3 bytes | `(b1 << 16) \| (b2 << 8) \| b3` |
 
-`0xf0`–`0xf9` are invalid as varint prefixes in this format.  Strings are
+`0xf0`–`0xf9` are invalid as varint prefixes in this format. Strings are
 length-prefixed with a varint and encoded as UTF-8.
 
 > Note: the word list uses a single unsigned byte for each word length, not a
-> varint.  The other files use the table above.
+> varint. The other files use the table above.
 
 ## `acu_nilai.txt` — headwords
 
@@ -100,7 +110,7 @@ The stored 32-bit value used by the app is:
 
 ## `acu_desc_N.s` — description blocks
 
-One file contains many entries.  Each entry is located by an offset from
+One file contains many entries. Each entry is located by an offset from
 `acu_offlens.txt` and is decoded until the `0xff` terminator.
 
 ```text
@@ -112,12 +122,12 @@ acu_desc_N.s
     -> read CAV records until 0xff
 ```
 
-The blocks are ~950 KB of CAV data after decompression.  The last block
+The blocks are ~950 KB of CAV data after decompression. The last block
 (`acu_desc_27.s`) is smaller because it contains the tail of the dictionary.
 
 ## CAV records
 
-CAV stands for **Code-Attribute-Value**.  Each record starts with a one-byte
+CAV stands for **Code-Attribute-Value**. Each record starts with a one-byte
 code; the code determines whether the record has a string, an integer, or no
 argument.
 
@@ -152,7 +162,7 @@ argument.
 | 40 | Reference to a headword index (1-based) |
 | 41 | Arrow/reference index (1-based) |
 
-The integer is a varint.  The parser resolves it with `words[number - 1]`; an
+The integer is a varint. The parser resolves it with `words[number - 1]`; an
 out-of-range value is rendered as `#<number>`.
 
 ### Argument-less codes
@@ -198,7 +208,7 @@ ff
 
 ## Entry parser behaviour
 
-The Python parser follows the app’s display semantics:
+The Python parser follows the app's display semantics:
 
 1. `0` text is appended to the current definition.
 2. Codes `10`–`15` flush the current definition and switch sections.
@@ -209,7 +219,8 @@ The Python parser follows the app’s display semantics:
    the current section.
 6. `255` flushes the final definition and ends the entry.
 
-The output of `python scripts/extract_dict.py` is a JSON object per entry:
+The flat view from `python scripts/extract_dict.py` is one JSON object per
+entry:
 
 ```json
 {
@@ -228,7 +239,9 @@ The output of `python scripts/extract_dict.py` is a JSON object per entry:
 }
 ```
 
-Empty fields are omitted.
+Empty fields are omitted. Note this flat view is lossier than SQLite: it
+groups subentries into one string per word. The customer database in
+[database.md](database.md) keeps one row per subentry/definition instead.
 
 ## Other files
 
@@ -250,5 +263,5 @@ The parsers are in:
 - [`src/kbbi_extract/dictionary.py`](../src/kbbi_extract/dictionary.py) — word
   list, offsets, and entry assembly.
 
-For the original app’s smali paths, see
-[`references.md`](references.md).
+For the original app's smali paths, see
+[references.md](references.md).

@@ -1,7 +1,8 @@
 # Decryption reference
 
-This page is the concise reference for the cryptographic layer.  The discovery
-process is in [`reverse-engineering.md`](reverse-engineering.md).
+This page is the concise reference for the cryptographic layer. The discovery
+story is in [reverse-engineering.md](reverse-engineering.md); the runnable
+steps are in [extraction.md](extraction.md).
 
 ## Summary
 
@@ -26,7 +27,7 @@ cav_bytes  = gunzip(Salsa20(key, nonce, ciphertext))
 ## Key derivation
 
 The key is assembled by `a1/j0.smali` (`pswitch_1`) from hard-coded fragments
-and a 64-bit rolling hash.  `p8/n.c(long)` renders each 64-bit value as exactly
+and a 64-bit rolling hash. `p8/n.c(long)` renders each 64-bit value as exactly
 16 lowercase hex characters.
 
 ```text
@@ -45,7 +46,8 @@ key_hex = "ffef8a8d11f535b73cd24fd31e"
 ```
 
 The nonce is the separate literal `fa1f5b7694c268fc`, returned by
-`a1/j0.smali` (`pswitch_0`).
+`a1/j0.smali` (`pswitch_0`). The exact smali walk-through is in
+[reverse-engineering §7](reverse-engineering.md#7-recover-the-key).
 
 ### Why decompilers get it wrong
 
@@ -55,9 +57,9 @@ The Kotlin source is effectively:
 val seed = (someHashCode.toLong() shl 31) or 0x3ade68b1L
 ```
 
-Some Java decompilers render the shift as a 32-bit `int` shift.  That changes
-the upper bits of the seed and therefore the entire key.  The smali is
-unambiguous: `int-to-long` followed by `shl-long`.  The seed and final key above
+Some Java decompilers render the shift as a 32-bit `int` shift. That changes
+the upper bits of the seed and therefore the entire key. The smali is
+unambiguous: `int-to-long` followed by `shl-long`. The seed and final key above
 were verified against the decrypted GZIP magic and against the independent
 [`Definisi/kbbi`](https://github.com/Definisi/kbbi) extractor.
 
@@ -84,12 +86,14 @@ def decrypt_block(path: str) -> bytes:
     return gzip.decompress(gzip_bytes)
 ```
 
-Expected first bytes after Salsa20: `1f 8b 08 00`.  If you see anything else,
+Expected first bytes after Salsa20: `1f 8b 08 00`. If you see anything else,
 the key or nonce is wrong.
 
-## CLI
+The production version of this logic lives in
+[`src/kbbi_extract/crypto.py`](../src/kbbi_extract/crypto.py)
+(`derive_key_hex()`, `salsa20_decrypt()`, `decrypt_block()`).
 
-The repository wraps the same logic:
+## CLI
 
 ```bash
 # All blocks, default paths
@@ -114,7 +118,7 @@ non-encrypted dictionary file into the same output directory:
 | default | `output/dictdata/acu_desc_N.cav` (gunzipped CAV) plus `acu_nilai.txt`, `acu_offlens.txt`, `stats.txt`, `kat_*.txt`, … |
 | `--raw-gzip` | `output/dictdata/acu_desc_N.s.gz` (Salsa20 plaintext) plus the same plaintext tables |
 
-Existing files are skipped unless `--force` is passed.  The combined output
+Existing files are skipped unless `--force` is passed. The combined output
 directory is self-contained:
 `pixi run python scripts/kbbi_extract.py info output/dictdata` and
 `pixi run python scripts/extract_dict.py output/dictdata` work directly from it.
@@ -139,6 +143,9 @@ A complete run prints:
 done: 28 written, 0 skipped, 28 total; 8,860,079 ciphertext bytes -> 26,240,696 plaintext bytes
 ```
 
+`pixi run info` re-checks counts without rewriting files; `pixi run test`
+includes a real-block decryption test (skipped when `artifacts/` is absent).
+
 ## Security properties
 
 This is obfuscation, not a secure cryptographic design:
@@ -149,7 +156,7 @@ This is obfuscation, not a secure cryptographic design:
 - The key is recoverable from the application binary.
 - The same key stream begins at counter 0 for each block.
 
-Do not reuse this construction for new data.  For a real system, use an
+Do not reuse this construction for new data. For a real system, use an
 authenticated cipher such as AES-GCM or ChaCha20-Poly1305 and a per-file random
 nonce.
 

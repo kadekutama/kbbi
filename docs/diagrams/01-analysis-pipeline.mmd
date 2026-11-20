@@ -1,17 +1,17 @@
 flowchart LR
-    A["kbbi.xapk"] --> B["unzip"]
-    B --> C["base.apk"]
-    B --> D["config.* splits"]
-    C --> E["apktool d --lib ..."]
+    A["kbbi xapk"] --> B["unzip"]
+    B --> C["base apk"]
+    B --> D["config splits"]
+    C --> E["apktool decode with lib"]
     D --> E
-    E --> F["decoded assets + smali"]
-    F --> G["acu_desc_*.s ciphertext"]
-    F --> H["acu_nilai.txt + acu_offlens.txt"]
+    E --> F["decoded assets and smali"]
+    F --> G["acu_desc ciphertext"]
+    F --> H["word list and offsets"]
     F --> I["obfuscated smali"]
-    I --> J["trace p8/z -> p8/l -> q8/h8/o8"]
-    J --> K["key + nonce + Salsa20/GZIP"]
-    G --> L["Salsa20 -> GZIP -> CAV"]
+    I --> J["trace p8z to p8l to q8 h8 o8"]
+    J --> K["key plus nonce plus Salsa20 GZIP"]
+    G --> L["Salsa20 then GZIP then CAV"]
     K --> L
     H --> M["entry parser"]
     L --> M
-    M --> N["JSON / JSONL"]
+    M --> N["JSON and JSONL"]

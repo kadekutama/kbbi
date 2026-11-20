@@ -15,7 +15,7 @@ kata 1 ── N lema 1 ── N arti 1 ── N contoh
 - `relasi` — one relation per row
 
 There are no label dictionaries, no full-text shadow tables, no block/offset
-columns, and no many-to-many category tables.  Multiple values in a single
+columns, and no many-to-many category tables. Multiple values in a single
 column are JSON arrays.
 
 The output is `output/kbbi.sqlite` (about 65 MiB for KBBI 6.2.0), built with:
@@ -23,6 +23,51 @@ The output is `output/kbbi.sqlite` (about 65 MiB for KBBI 6.2.0), built with:
 ```bash
 pixi run db
 ```
+
+## Model diagram
+
+Source: [`diagrams/06-database-schema.mmd`](diagrams/06-database-schema.mmd).
+
+```mermaid
+erDiagram
+    kata ||--o{ lema : has
+    lema ||--o{ arti : has
+    arti ||--o{ contoh : has
+    arti ||--o{ arti_metadata : has
+    lema ||--o{ relasi : has
+    kata {
+        int id
+        string kata
+    }
+    lema {
+        int id
+        int kata_id
+        string lema
+    }
+    arti {
+        int id
+        int lema_id
+        int nomor
+    }
+    arti_metadata {
+        int id
+        int arti_id
+        string kunci
+    }
+    contoh {
+        int id
+        int arti_id
+        string teks
+    }
+    relasi {
+        int id
+        int lema_id
+        string jenis
+    }
+```
+
+Companion tables (`kata_hari_ini`, `kata_tahun_ini`, `tentang`, `dokumen`,
+`info`) are independent lists — see [§Companion tables](#companion-tables).
 
 ## Tables
 

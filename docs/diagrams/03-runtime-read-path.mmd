@@ -1,14 +1,14 @@
 sequenceDiagram
-    participant Z as p8/z
-    participant L as p8/l
-    participant S as q8/c Salsa20
-    participant G as h8/c GZIP
-    participant B as o8/b CAV
-    participant O as acu_offlens.txt
-    O->>Z: file_no + offset
-    Z->>L: open acu_desc_N.s
+    participant O as offsets
+    participant Z as reader
+    participant L as loader
+    participant S as Salsa20
+    participant G as GZIP
+    participant B as CAV
+    O->>Z: file number plus offset
+    Z->>L: open acu desc block
     L->>S: ciphertext
     S->>G: Salsa20 plaintext
     G->>B: decompressed CAV bytes
-    Z->>B: seek(offset)
-    B-->>Z: Cav(code, number, text) until 0xff
+    Z->>B: seek to offset
+    B-->>Z: records until end marker
