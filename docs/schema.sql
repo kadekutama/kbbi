@@ -1,5 +1,5 @@
 -- KBBI SQLite schema (generated from output/kbbi.sqlite)
--- The FTS5 shadow tables are intentionally omitted.
+-- FTS5 shadow tables are intentionally omitted.
 
 -- table: about_pages
 CREATE TABLE about_pages (
@@ -21,12 +21,9 @@ CREATE TABLE categories (
 
 -- table: definition_labels
 CREATE TABLE definition_labels (
-    id INTEGER PRIMARY KEY,
     definition_id INTEGER NOT NULL REFERENCES definitions(id),
-    kind TEXT NOT NULL,
-    code TEXT NOT NULL,
-    value TEXT NOT NULL,
-    category_id INTEGER REFERENCES categories(id)
+    label_id INTEGER NOT NULL REFERENCES labels(id),
+    PRIMARY KEY(definition_id, label_id)
 );
 
 -- table: definitions
@@ -77,6 +74,16 @@ CREATE TABLE kti_pages (
     year INTEGER PRIMARY KEY,
     title TEXT,
     html TEXT NOT NULL
+);
+
+-- table: labels
+CREATE TABLE labels (
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL,
+    code TEXT NOT NULL,
+    value TEXT NOT NULL,
+    category_id INTEGER REFERENCES categories(id),
+    UNIQUE(kind, code, value)
 );
 
 -- table: metadata
@@ -145,6 +152,9 @@ CREATE TABLE word_of_day (
     entry_id INTEGER NOT NULL REFERENCES entries(id)
 );
 
+-- index: idx_definition_labels_label
+CREATE INDEX idx_definition_labels_label ON definition_labels(label_id);
+
 -- index: idx_definitions_subentry
 CREATE INDEX idx_definitions_subentry ON definitions(subentry_id);
 
@@ -161,10 +171,7 @@ CREATE INDEX idx_entry_categories_category ON entry_categories(category_id);
 CREATE INDEX idx_examples_definition ON examples(definition_id);
 
 -- index: idx_labels_category
-CREATE INDEX idx_labels_category ON definition_labels(category_id);
-
--- index: idx_labels_definition
-CREATE INDEX idx_labels_definition ON definition_labels(definition_id);
+CREATE INDEX idx_labels_category ON labels(category_id);
 
 -- index: idx_relations_entry
 CREATE INDEX idx_relations_entry ON relations(entry_id);
@@ -210,3 +217,173 @@ SELECT
     (SELECT COUNT(*) FROM definitions d WHERE d.subentry_id = s.id) AS definition_count,
     (SELECT COUNT(*) FROM relations r WHERE r.subentry_id = s.id) AS relation_count
 FROM subentries s;
+
+-- view: v_definition_labels
+CREATE VIEW v_definition_labels AS
+SELECT
+    dl.definition_id,
+    l.kind,
+    l.code,
+    l.value,
+    l.category_id,
+    c.name AS category_name
+FROM definition_labels dl
+JOIN labels l ON l.id = dl.label_id
+LEFT JOIN categories c ON c.id = l.category_id;
+
+-- view: v_example_details
+CREATE VIEW v_example_details AS
+SELECT
+    x.id AS example_id,
+    x.text AS example,
+    d.id AS definition_id,
+    d.ordinal AS definition_no,
+    s.id AS subentry_id,
+    s.display_lemma AS lemma,
+    e.id AS entry_id,
+    e.headword AS kata
+FROM examples x
+JOIN definitions d ON d.id = x.definition_id
+JOIN subentries s ON s.id = d.subentry_id
+JOIN entries e ON e.id = s.entry_id;
+
+-- view: v_relation_details
+CREATE VIEW v_relation_details AS
+SELECT
+    r.id AS relation_id,
+    r.type,
+    r.context,
+    e.id AS source_entry_id,
+    e.headword AS source_kata,
+    s.id AS subentry_id,
+    s.display_lemma AS source_lemma,
+    r.target_entry_id,
+    r.target_text,
+    t.headword AS target_kata
+FROM relations r
+JOIN entries e ON e.id = r.entry_id
+LEFT JOIN subentries s ON s.id = r.subentry_id
+LEFT JOIN entries t ON t.id = r.target_entry_id;
+
+-- view: v_word_pages
+CREATE VIEW v_word_pages AS
+SELECT
+    e.id AS entry_id,
+    e.headword AS kata,
+    s.id AS subentry_id,
+    s.ordinal AS subentry_no,
+    s.display_lemma AS lemma,
+    s.lemma_base,
+    s.homograph,
+    s.pronunciation,
+    s.etymology,
+    s.parent_entry_id,
+    p.headword AS parent_headword,
+    (
+        SELECT json_group_array(
+            json_object('ordinal', d.ordinal, 'number', d.number, 'text', d.text)
+        )
+        FROM definitions d
+        WHERE d.subentry_id = s.id
+    ) AS definitions_json,
+    (
+        SELECT json_group_array(json_object('kind', l.kind, 'value', l.value))
+        FROM definitions d
+        JOIN definition_labels dl ON dl.definition_id = d.id
+        JOIN labels l ON l.id = dl.label_id
+        WHERE d.subentry_id = s.id
+    ) AS labels_json,
+    (
+        SELECT json_group_array(x.text)
+        FROM examples x
+        JOIN definitions d ON d.id = x.definition_id
+        WHERE d.subentry_id = s.id
+    ) AS examples_json,
+    (
+        SELECT json_group_array(
+            json_object('type', r.type, 'target', r.target_text, 'context', r.context)
+        )
+        FROM relations r
+        WHERE r.subentry_id = s.id
+    ) AS relations_json,
+    (
+        SELECT json_group_array(json_object('kind', c.kind, 'name', c.name))
+        FROM entry_categories ec
+        JOIN categories c ON c.id = ec.category_id
+        WHERE ec.entry_id = e.id
+    ) AS categories_json
+FROM entries e
+JOIN subentries s ON s.entry_id = e.id
+LEFT JOIN entries p ON p.id = s.parent_entry_id;
+
+-- view: v_words
+CREATE VIEW v_words AS
+SELECT
+    e.id AS entry_id,
+    e.headword AS kata,
+    e.headword_folded AS kata_folded,
+    s.id AS subentry_id,
+    s.ordinal AS subentry_no,
+    s.display_lemma AS lemma,
+    s.lemma_base AS lemma_base,
+    s.homograph,
+    s.pronunciation,
+    s.etymology,
+    s.parent_entry_id,
+    p.headword AS parent_headword,
+    d.id AS definition_id,
+    d.ordinal AS definition_no,
+    d.number AS definition_number,
+    d.text AS meaning,
+    d.rich_json,
+    (
+        SELECT group_concat(l.kind || ': ' || l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id
+    ) AS labels,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'pos'
+    ) AS pos,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'language'
+    ) AS languages,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'field'
+    ) AS fields,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'register'
+    ) AS registers,
+    (
+        SELECT group_concat(x.text, '; ')
+        FROM examples x
+        WHERE x.definition_id = d.id
+        ORDER BY x.ordinal
+    ) AS examples,
+    (
+        SELECT group_concat(r.type || ': ' || r.target_text, '; ')
+        FROM relations r
+        WHERE r.subentry_id = s.id
+    ) AS relations,
+    (
+        SELECT group_concat(c.kind || ': ' || c.name, '; ')
+        FROM entry_categories ec
+        JOIN categories c ON c.id = ec.category_id
+        WHERE ec.entry_id = e.id
+    ) AS categories
+FROM entries e
+JOIN subentries s ON s.entry_id = e.id
+LEFT JOIN entries p ON p.id = s.parent_entry_id
+LEFT JOIN definitions d ON d.subentry_id = s.id;

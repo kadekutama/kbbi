@@ -78,13 +78,19 @@ CREATE TABLE search_terms (
     PRIMARY KEY(term, entry_id, kind)
 );
 
-CREATE TABLE definition_labels (
+CREATE TABLE labels (
     id INTEGER PRIMARY KEY,
-    definition_id INTEGER NOT NULL REFERENCES definitions(id),
     kind TEXT NOT NULL,
     code TEXT NOT NULL,
     value TEXT NOT NULL,
-    category_id INTEGER REFERENCES categories(id)
+    category_id INTEGER REFERENCES categories(id),
+    UNIQUE(kind, code, value)
+);
+
+CREATE TABLE definition_labels (
+    definition_id INTEGER NOT NULL REFERENCES definitions(id),
+    label_id INTEGER NOT NULL REFERENCES labels(id),
+    PRIMARY KEY(definition_id, label_id)
 );
 
 CREATE TABLE examples (
@@ -163,6 +169,171 @@ SELECT
     (SELECT COUNT(*) FROM definitions d WHERE d.subentry_id = s.id) AS definition_count,
     (SELECT COUNT(*) FROM relations r WHERE r.subentry_id = s.id) AS relation_count
 FROM subentries s;
+
+CREATE VIEW v_words AS
+SELECT
+    e.id AS entry_id,
+    e.headword AS kata,
+    e.headword_folded AS kata_folded,
+    s.id AS subentry_id,
+    s.ordinal AS subentry_no,
+    s.display_lemma AS lemma,
+    s.lemma_base AS lemma_base,
+    s.homograph,
+    s.pronunciation,
+    s.etymology,
+    s.parent_entry_id,
+    p.headword AS parent_headword,
+    d.id AS definition_id,
+    d.ordinal AS definition_no,
+    d.number AS definition_number,
+    d.text AS meaning,
+    d.rich_json,
+    (
+        SELECT group_concat(l.kind || ': ' || l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id
+    ) AS labels,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'pos'
+    ) AS pos,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'language'
+    ) AS languages,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'field'
+    ) AS fields,
+    (
+        SELECT group_concat(l.value, '; ')
+        FROM definition_labels dl
+        JOIN labels l ON l.id = dl.label_id
+        WHERE dl.definition_id = d.id AND l.kind = 'register'
+    ) AS registers,
+    (
+        SELECT group_concat(x.text, '; ')
+        FROM examples x
+        WHERE x.definition_id = d.id
+        ORDER BY x.ordinal
+    ) AS examples,
+    (
+        SELECT group_concat(r.type || ': ' || r.target_text, '; ')
+        FROM relations r
+        WHERE r.subentry_id = s.id
+    ) AS relations,
+    (
+        SELECT group_concat(c.kind || ': ' || c.name, '; ')
+        FROM entry_categories ec
+        JOIN categories c ON c.id = ec.category_id
+        WHERE ec.entry_id = e.id
+    ) AS categories
+FROM entries e
+JOIN subentries s ON s.entry_id = e.id
+LEFT JOIN entries p ON p.id = s.parent_entry_id
+LEFT JOIN definitions d ON d.subentry_id = s.id;
+
+CREATE VIEW v_word_pages AS
+SELECT
+    e.id AS entry_id,
+    e.headword AS kata,
+    s.id AS subentry_id,
+    s.ordinal AS subentry_no,
+    s.display_lemma AS lemma,
+    s.lemma_base,
+    s.homograph,
+    s.pronunciation,
+    s.etymology,
+    s.parent_entry_id,
+    p.headword AS parent_headword,
+    (
+        SELECT json_group_array(
+            json_object('ordinal', d.ordinal, 'number', d.number, 'text', d.text)
+        )
+        FROM definitions d
+        WHERE d.subentry_id = s.id
+    ) AS definitions_json,
+    (
+        SELECT json_group_array(json_object('kind', l.kind, 'value', l.value))
+        FROM definitions d
+        JOIN definition_labels dl ON dl.definition_id = d.id
+        JOIN labels l ON l.id = dl.label_id
+        WHERE d.subentry_id = s.id
+    ) AS labels_json,
+    (
+        SELECT json_group_array(x.text)
+        FROM examples x
+        JOIN definitions d ON d.id = x.definition_id
+        WHERE d.subentry_id = s.id
+    ) AS examples_json,
+    (
+        SELECT json_group_array(
+            json_object('type', r.type, 'target', r.target_text, 'context', r.context)
+        )
+        FROM relations r
+        WHERE r.subentry_id = s.id
+    ) AS relations_json,
+    (
+        SELECT json_group_array(json_object('kind', c.kind, 'name', c.name))
+        FROM entry_categories ec
+        JOIN categories c ON c.id = ec.category_id
+        WHERE ec.entry_id = e.id
+    ) AS categories_json
+FROM entries e
+JOIN subentries s ON s.entry_id = e.id
+LEFT JOIN entries p ON p.id = s.parent_entry_id;
+
+CREATE VIEW v_example_details AS
+SELECT
+    x.id AS example_id,
+    x.text AS example,
+    d.id AS definition_id,
+    d.ordinal AS definition_no,
+    s.id AS subentry_id,
+    s.display_lemma AS lemma,
+    e.id AS entry_id,
+    e.headword AS kata
+FROM examples x
+JOIN definitions d ON d.id = x.definition_id
+JOIN subentries s ON s.id = d.subentry_id
+JOIN entries e ON e.id = s.entry_id;
+
+CREATE VIEW v_definition_labels AS
+SELECT
+    dl.definition_id,
+    l.kind,
+    l.code,
+    l.value,
+    l.category_id,
+    c.name AS category_name
+FROM definition_labels dl
+JOIN labels l ON l.id = dl.label_id
+LEFT JOIN categories c ON c.id = l.category_id;
+
+CREATE VIEW v_relation_details AS
+SELECT
+    r.id AS relation_id,
+    r.type,
+    r.context,
+    e.id AS source_entry_id,
+    e.headword AS source_kata,
+    s.id AS subentry_id,
+    s.display_lemma AS source_lemma,
+    r.target_entry_id,
+    r.target_text,
+    t.headword AS target_kata
+FROM relations r
+JOIN entries e ON e.id = r.entry_id
+LEFT JOIN subentries s ON s.id = r.subentry_id
+LEFT JOIN entries t ON t.id = r.target_entry_id;
 """
 
 INDEX_FILES = {
@@ -324,8 +495,8 @@ def _index_files(connection: sqlite3.Connection) -> None:
         CREATE INDEX idx_subentries_entry ON subentries(entry_id);
         CREATE INDEX idx_subentries_parent ON subentries(parent_entry_id);
         CREATE INDEX idx_definitions_subentry ON definitions(subentry_id);
-        CREATE INDEX idx_labels_definition ON definition_labels(definition_id);
-        CREATE INDEX idx_labels_category ON definition_labels(category_id);
+        CREATE INDEX idx_definition_labels_label ON definition_labels(label_id);
+        CREATE INDEX idx_labels_category ON labels(category_id);
         CREATE INDEX idx_examples_definition ON examples(definition_id);
         CREATE INDEX idx_relations_entry ON relations(entry_id);
         CREATE INDEX idx_relations_subentry ON relations(subentry_id);
@@ -422,6 +593,8 @@ def build_database(
     subentry_rows: list[tuple[Any, ...]] = []
     definition_rows: list[tuple[Any, ...]] = []
     label_rows: list[tuple[Any, ...]] = []
+    definition_label_rows: list[tuple[int, int]] = []
+    label_cache: dict[tuple[str, str, str], int] = {}
     example_rows: list[tuple[Any, ...]] = []
     relation_rows: list[tuple[Any, ...]] = []
     search_term_rows: list[tuple[Any, ...]] = []
@@ -494,23 +667,28 @@ def build_database(
                 definition_parts.append(definition.text)
 
                 for label in definition.labels:
-                    label_id += 1
-                    category_kind = LABEL_CATEGORY_KINDS.get(label.kind)
-                    category_id = (
-                        category_cache.get((category_kind, label.code))
-                        if category_kind is not None
-                        else None
-                    )
-                    label_rows.append(
-                        (
-                            label_id,
-                            current_definition_id,
-                            label.kind,
-                            label.code,
-                            label.value,
-                            category_id,
+                    key = (label.kind, label.code, label.value)
+                    label_pk = label_cache.get(key)
+                    if label_pk is None:
+                        label_id += 1
+                        label_pk = label_id
+                        label_cache[key] = label_pk
+                        category_kind = LABEL_CATEGORY_KINDS.get(label.kind)
+                        category_id = (
+                            category_cache.get((category_kind, label.code))
+                            if category_kind is not None
+                            else None
                         )
-                    )
+                        label_rows.append(
+                            (
+                                label_pk,
+                                label.kind,
+                                label.code,
+                                label.value,
+                                category_id,
+                            )
+                        )
+                    definition_label_rows.append((current_definition_id, label_pk))
                     label_parts.append(label.value)
 
                 for ordinal, example in enumerate(definition.examples, start=1):
@@ -566,9 +744,14 @@ def build_database(
     )
     _insert_many(
         connection,
-        "INSERT INTO definition_labels(id, definition_id, kind, code, value, category_id) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO labels(id, kind, code, value, category_id) "
+        "VALUES (?, ?, ?, ?, ?)",
         label_rows,
+    )
+    _insert_many(
+        connection,
+        "INSERT OR IGNORE INTO definition_labels(definition_id, label_id) VALUES (?, ?)",
+        definition_label_rows,
     )
     _insert_many(
         connection,
@@ -615,7 +798,8 @@ def build_database(
         "entries": "entries",
         "subentries": "subentries",
         "definitions": "definitions",
-        "labels": "definition_labels",
+        "labels": "labels",
+        "definition_labels": "definition_labels",
         "examples": "examples",
         "relations": "relations",
         "search_terms": "search_terms",

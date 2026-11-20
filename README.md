@@ -14,7 +14,7 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 | Headwords | 196,195 |
 | Description blocks | 28 (`acu_desc_0.s` … `acu_desc_27.s`) |
 | Decrypted CAV data | 26,240,696 bytes |
-| SQLite output | `output/kbbi.sqlite` (218 MiB) |
+| SQLite output | `output/kbbi.sqlite` (216 MiB) |
 | Cipher | Salsa20/20, then GZIP |
 | Key | `ffef8a8d11f535b73cd24fd31ef296d0573ade68b1f079cbdea460149ed4036e` |
 | Nonce | `fa1f5b7694c268fc` |
@@ -44,6 +44,7 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 │   ├── decrypt_dict.py        # decrypt all acu_desc_*.s files
 │   ├── extract_dict.py        # extract entries to JSON/JSONL
 │   ├── build_db.py            # build output/kbbi.sqlite
+│   ├── lookup.py              # readable word lookup from the SQLite DB
 │   ├── kbbi_extract.py        # run the CLI from the source tree
 │   ├── unpack_xapk.py         # stdlib zip extraction
 │   ├── decode_apk.py          # manifest-aware APKTool wrapper
@@ -98,6 +99,21 @@ Build the normalized database:
 
 ```bash
 pixi run db
+```
+
+Try a word without writing SQL:
+
+```bash
+pixi run lookup abnormal
+pixi run lookup elang --json
+```
+
+For ad-hoc SQL, start with the convenience view:
+
+```sql
+SELECT kata, lemma, pronunciation, meaning, labels, examples, relations
+FROM v_words
+WHERE kata_folded = 'abnormal';
 ```
 
 To extract the flat JSONL view as well:

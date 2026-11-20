@@ -35,6 +35,7 @@ erDiagram
     SUBENTRIES ||--o{ DEFINITIONS : has
     SUBENTRIES ||--o{ RELATIONS : source
     DEFINITIONS ||--o{ DEFINITION_LABELS : has
+    LABELS ||--o{ DEFINITION_LABELS : assigned
     DEFINITIONS ||--o{ EXAMPLES : has
     ENTRIES ||--o{ RELATIONS : source_entry
     ENTRIES ||--o{ RELATIONS : target_entry
@@ -79,6 +80,22 @@ references directly joinable.
 | `source_block` | source `acu_desc_N` block |
 | `source_offset` | offset in the CAV stream |
 
+`headword_folded` is `NFKD` normalized, case-folded, and stripped of combining
+marks.  It is identical to `headword` for most ASCII entries, but not for
+accented or uppercase forms:
+
+```sql
+SELECT headword, headword_folded
+FROM entries
+WHERE headword <> headword_folded
+LIMIT 5;
+```
+
+Examples: `à` → `a`, `abad al-abīd` → `abad al-abid`,
+`accent circonflêxe` → `accent circonflexe`.  There are 241 such rows in
+6.2.0.  Keep both: `headword` is the display value, `headword_folded` is for
+case/accent-insensitive lookup.
+
 ### `subentries`
 
 The display blocks shown on an entry page.  For `AB`, the page contains ten
@@ -120,16 +137,33 @@ and superscript, scientific names, and chemical formulas.  A typical run list:
 ]
 ```
 
-### `definition_labels`
+### `labels` and `definition_labels`
 
-Normalized labels for filtering and for matching the app’s category links.
+`labels` is the canonical label dictionary.  There are only **4,614** distinct
+labels in 6.2.0, for example `(pos, n, n)`, `(language, Sd, Sd)`, or
+`(label, sing, sing)`.  `definition_labels` is the many-to-many junction that
+assigns those labels to definitions (267,018 assignments).
 
-| Column | Meaning |
+This is why a query on `definition_labels` alone shows many repeated
+`label_id` values: the same label is used by many definitions.  It does **not**
+duplicate the label text itself.  Join `labels` to read the label:
+
+```sql
+SELECT definition_id, kind, code, value, category_name
+FROM v_definition_labels
+WHERE definition_id = ?;
+```
+
+| `labels` column | Meaning |
 | --- | --- |
 | `kind` | `pos`, `language`, `field`, `register`, `label`, `scientific_name`, `chemical_formula` |
 | `code` | raw code, e.g. `n`, `Sd`, `Adm`, `ark`, `sing` |
 | `value` | display value |
 | `category_id` | canonical category when the label maps to one |
+
+The junction primary key `(definition_id, label_id)` collapses repeated
+chemical-formula tokens within one definition; 15 such duplicate assignments
+were removed in the 6.2.0 build.
 
 ### `examples`
 
@@ -158,6 +192,74 @@ instead of being buried in a definition string.
 headword; `context` contains the preceding text such as
 `bentuk tidak baku:`.  A relation can be attached to a subentry and optionally
 to a definition.
+
+## Convenience views (start here)
+
+The normalized tables are correct but verbose to join.  These views expose the
+same data in shapes that match the app screens.
+
+### `v_words` — one row per definition
+
+This is the single wide “words” view.  It includes the headword, syllabified
+lemma, homograph, pronunciation, etymology, parent headword, definition,
+`rich_json`, labels, examples, relations, and category names.
+
+```sql
+SELECT kata, lemma, pronunciation, meaning, labels, examples, relations
+FROM v_words
+WHERE kata_folded = 'abnormal'
+ORDER BY subentry_no, definition_no;
+```
+
+### `v_word_pages` — one row per subentry
+
+The page blocks, with `definitions_json`, `labels_json`, `examples_json`,
+`relations_json`, and `categories_json` aggregated as JSON arrays:
+
+```sql
+SELECT kata, lemma, pronunciation, definitions_json, relations_json
+FROM v_word_pages
+WHERE kata = 'elang'
+ORDER BY subentry_no;
+```
+
+### Other views
+
+| View | One row per | Use |
+| --- | --- | --- |
+| `v_definition_labels` | label assignment | definition → label → category |
+| `v_example_details` | example | example → definition → word |
+| `v_relation_details` | relation | source word, relation type, target word |
+| `category_summary` | category | menu list with `entry_count` |
+| `subentry_summary` | subentry | quick definition/relation counts |
+
+### Quick lookup without SQL
+
+```bash
+pixi run lookup abnormal
+pixi run lookup elang
+pixi run lookup elang --json
+```
+
+`scripts/lookup.py` uses `v_words`; `--json` prints the full rows.
+
+### Global IDs are not ordinals
+
+`examples.id`, `definitions.id`, and `subentries.id` are global
+autoincrement-style IDs, not positions inside a word.  This is the source of a
+common confusion:
+
+```text
+example id 12 -> definition_id 58 -> subentry 50 -> entry 37 = "ab-"
+```
+
+The example text is `"abnormal"`, but the owning headword is `ab-` (the prefix
+entry), not the headword `abnormal`.  The entry `abnormal` is entry 295 with
+definition 392 and example 61.  Use `v_example_details` to avoid this trap:
+
+```sql
+SELECT * FROM v_example_details WHERE example_id = 12;
+```
 
 ## Categories and navigation
 
@@ -228,6 +330,11 @@ ORDER BY bm25(search_fts, 0, 5, 1, 1, 1)
 LIMIT 20;
 ```
 
+`search_fts_data`, `search_fts_idx`, `search_fts_content`,
+`search_fts_docsize`, and `search_fts_config` are FTS5’s internal shadow
+tables.  They are binary/internal storage; query `search_fts`, never the
+shadow tables, and do not edit or drop them individually.
+
 ## Entry-page queries
 
 Breadcrumb and page header:
@@ -249,9 +356,9 @@ JOIN subentries s ON s.id = d.subentry_id
 WHERE s.entry_id = ?
 ORDER BY s.ordinal, d.ordinal;
 
-SELECT l.kind, l.code, l.value, l.category_id
-FROM definition_labels l
-WHERE l.definition_id = ?;
+SELECT kind, code, value, category_id
+FROM v_definition_labels
+WHERE definition_id = ?;
 ```
 
 Relations (“Gabungan kata”, “Peribahasa”, …):
@@ -283,7 +390,8 @@ The 6.2.0 build produces:
 | `entries` | 196,195 |
 | `subentries` | 211,473 |
 | `definitions` | 233,820 |
-| `definition_labels` | 267,033 |
+| `labels` | 4,614 |
+| `definition_labels` | 267,018 assignments |
 | `examples` | 47,792 |
 | `relations` | 116,439 |
 | `categories` | 426 (390 listed) |
@@ -306,8 +414,12 @@ structural records differently.  The important counts (196,195 headwords and
   case variants and homographs on one page.  `entries` mirrors that page;
   `subentries` mirrors the blocks inside it.
 - **Definitions are separate from labels.**  `definitions.text` is clean text
-  for full-text search; labels and inline formatting are normalized in
-  `definition_labels` and `rich_json`.
+  for full-text search; `labels` is the canonical label dictionary,
+  `definition_labels` is the assignment junction, and `rich_json` preserves
+  inline rendering.
+- **Views are the user-facing layer.**  `v_words` and `v_word_pages` give the
+  “one row with everything” shape without duplicating data in the normalized
+  core.
 - **Relations are typed.**  A compound word, a proverb, a derived word, and a
   “bentuk tidak baku” link all use code 40 but are not interchangeable.
 - **Categories come from the app’s own `kat_*` files.**  This keeps menu counts
@@ -320,3 +432,22 @@ structural records differently.  The important counts (196,195 headwords and
   stream.
 
 A standalone copy of the schema is in [`schema.sql`](schema.sql).
+
+## Regenerating after a KBBI update
+
+Yes, the database is fully disposable and rebuildable:
+
+```bash
+pixi run decrypt    # only if the decrypted dictdata changed
+pixi run db
+```
+
+`pixi run db` deletes and rebuilds `output/kbbi.sqlite` from the combined
+`output/dictdata` directory.  If a new app version changes the key, nonce, or
+CAV format, re-run the key derivation first (see
+[`decryption.md`](decryption.md)); the database builder itself is data-driven
+for block count, word count, categories, examples, relations, KTI pages, and
+about pages.
+
+The schema version is recorded in `metadata.schema_version`; bump it when the
+schema changes in a way that affects consumers.

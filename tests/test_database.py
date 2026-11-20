@@ -23,6 +23,7 @@ def test_build_database_small_fixture(tmp_path: Path) -> None:
         + _cav_text(20, "n")
         + b"\x00\x01 "
         + _cav_text(0, "definisi")
+        + _cav_text(50, "contoh")
         + b"\xff"
     )
     (dictdata / "kat_index_kelas.txt").write_bytes(b"\x01\x01n\x06Nomina")
@@ -36,6 +37,8 @@ def test_build_database_small_fixture(tmp_path: Path) -> None:
     assert stats["subentries"] == 1
     assert stats["definitions"] == 1
     assert stats["labels"] == 1
+    assert stats["definition_labels"] == 1
+    assert stats["examples"] == 1
     assert stats["search_terms"] == 2
     assert stats["categories"] == 1
     assert stats["words_of_day"] == 1
@@ -50,5 +53,11 @@ def test_build_database_small_fixture(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT headword FROM search_fts WHERE search_fts MATCH 'definisi'"
         ).fetchone() == ("rumah",)
+        assert connection.execute(
+            "SELECT kata, labels, examples FROM v_words WHERE kata_folded = 'rumah'"
+        ).fetchone() == ("rumah", "pos: n", "contoh")
+        assert connection.execute(
+            "SELECT kata, example FROM v_example_details WHERE example_id = 1"
+        ).fetchone() == ("rumah", "contoh")
     finally:
         connection.close()
