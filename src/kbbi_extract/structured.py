@@ -154,12 +154,14 @@ class _EntryParser:
         self.pending_parent: int | None = None
         self.section: str | None = None
         self.context: str = ""
+        self.pending_text: str = ""
         self.relation_counter = 0
 
     def parse(self) -> EntryStructure:
         for record in self.records:
             self._consume(record)
 
+        self._flush_pending_text()
         self._finish_definition()
         self._finish_subentry()
 
@@ -182,6 +184,7 @@ class _EntryParser:
         )
 
     def _finish_subentry(self) -> None:
+        self._flush_pending_text()
         self._finish_definition()
         if self.current is not None:
             self.current.pronunciation = self.current.pronunciation or None
@@ -195,6 +198,7 @@ class _EntryParser:
         self.pending_parent = None
         self.section = None
         self.context = ""
+        self.pending_text = ""
         self.definition_counter = 0
 
     def _ensure_definition(self) -> Definition:
@@ -221,6 +225,34 @@ class _EntryParser:
             text="",
             rich=[],
         )
+
+    def _flush_pending_text(self) -> None:
+        text = self.pending_text
+        self.pending_text = ""
+        if not text:
+            return
+
+        if self.section is not None:
+            self._append_context(text)
+            return
+
+        position = 0
+        for match in NUMBER_MARKER.finditer(text):
+            prefix = text[position : match.start()]
+            if prefix:
+                self._append_text(prefix)
+            if self.current_definition is not None and (
+                self.current_definition.text
+                or self.current_definition.labels
+                or self.current_definition.examples
+            ):
+                self._finish_definition()
+            self._start_definition(int(match.group(1)))
+            position = match.end()
+
+        tail = text[position:]
+        if tail:
+            self._append_text(tail)
 
     def _append_text(self, text: str) -> None:
         if not text:
@@ -296,7 +328,12 @@ class _EntryParser:
         cleaned: list[dict] = []
         for run in rich:
             if run.get("type") == "text":
-                text = _clean_text(str(run.get("text", "")))
+                # Keep leading/trailing spaces here: they separate formatted
+                # runs such as ``dari <i>abid</i>``.  Plain definition text
+                # is cleaned separately.
+                text = str(run.get("text", "")).replace("\r\n", "\n").replace("\r", "\n")
+                text = re.sub(r"[ \t\f\v]+", " ", text)
+                text = re.sub(r" *\n *", " ", text)
                 if not text:
                     continue
                 if cleaned and cleaned[-1].get("type") == "text":
@@ -321,51 +358,23 @@ class _EntryParser:
                 self._append_context(text)
                 return
 
-        stripped = text.strip()
-        if stripped.casefold().startswith(("bentuk tidak baku", "lihat", "bandingkan")):
-            self._append_context(text)
-            return
-
-        if self.context:
-            # Separators between references belong to the reference list, not
-            # to the definition.  A real definition token ends the list.
-            if stripped and not re.fullmatch(r"[\s;:,.،]*", stripped):
-                self.context = ""
-            else:
-                self._append_context(text)
-                return
-
-        position = 0
-        for match in NUMBER_MARKER.finditer(text):
-            prefix = text[position : match.start()]
-            if prefix:
-                self._append_text(prefix)
-
-            if self.current_definition is not None and (
-                self.current_definition.text
-                or self.current_definition.labels
-                or self.current_definition.examples
-            ):
-                self._finish_definition()
-            self._start_definition(int(match.group(1)))
-            position = match.end()
-
-        tail = text[position:]
-        if tail:
-            self._append_text(tail)
+        self.pending_text += text
 
     def _consume(self, record: CavRecord) -> None:
         code = record.code
 
         if code in SUBENTRY_KINDS:
+            self._flush_pending_text()
             self._start_subentry(record.text or self.word, SUBENTRY_KINDS[code])
             return
 
         if code == 41:
+            self._flush_pending_text()
             self.pending_parent = record.number
             return
 
         if code in SECTION_TYPES:
+            self._flush_pending_text()
             self._finish_definition()
             self.section = SECTION_TYPES[code]
             self.context = ""
@@ -376,6 +385,7 @@ class _EntryParser:
             return
 
         if code == 2:
+            self._flush_pending_text()
             if self.current is not None:
                 value = record.text or ""
                 self.current.pronunciation = (
@@ -386,6 +396,7 @@ class _EntryParser:
             return
 
         if code == 4:
+            self._flush_pending_text()
             if self.current is not None:
                 value = record.text or ""
                 self.current.etymology = (
@@ -396,6 +407,7 @@ class _EntryParser:
             return
 
         if code in (20, 21, 22, 25, 23, 24, 30, 31, 32, 33, 34):
+            self._flush_pending_text()
             kind = LABEL_KINDS[code]
             value = LABEL_VALUES.get(code) or record.text or ""
             if self.section is not None:
@@ -418,6 +430,7 @@ class _EntryParser:
             return
 
         if code == 50:
+            self._flush_pending_text()
             if self.section is not None:
                 self.section = None
                 self.context = ""
@@ -428,6 +441,7 @@ class _EntryParser:
             return
 
         if code in FORMAT_STYLES:
+            self._flush_pending_text()
             definition = self._ensure_definition()
             value = record.text or ""
             definition.text += value
@@ -440,6 +454,8 @@ class _EntryParser:
             if self.section is not None:
                 self._add_relation(self.section, record.number)
             else:
+                self.context += self.pending_text
+                self.pending_text = ""
                 relation_type = _relation_type(self.context)
                 definition_ordinal = (
                     self.current_definition.ordinal if self.current_definition else None
@@ -453,6 +469,7 @@ class _EntryParser:
             return
 
         if code == 255:
+            self._flush_pending_text()
             self._finish_definition()
             self._finish_subentry()
 

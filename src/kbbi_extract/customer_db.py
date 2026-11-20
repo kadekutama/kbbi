@@ -255,7 +255,8 @@ def _render_rich(definition: Definition) -> str:
                 parts.append(value)
     text = "".join(parts).strip()
     # A definition is one row; do not leak paragraph newlines into cells.
-    return re.sub(r"\s*\n\s*", " ", text)
+    text = re.sub(r"\s*\n\s*", " ", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
 
 
 def _definition_arrays(

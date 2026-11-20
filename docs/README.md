@@ -7,6 +7,7 @@
 | [file-format.md](file-format.md) | Varint encoding, `acu_nilai.txt`, `acu_offlens.txt`, CAV codes, entry parsing |
 | [database.md](database.md) | Customer-facing kata/lema/arti SQLite design, column dictionary, query recipes |
 | [schema.sql](schema.sql) | Standalone schema for the generated SQLite database |
+| [audit.md](audit.md) | Full raw-data / JSONL / SQLite completeness audit |
 | [references.md](references.md) | Local smali reference map and external links |
 | [diagrams/](diagrams/) | Standalone Mermaid sources for the flowcharts |
 

@@ -241,6 +241,7 @@ error and the key must be re-derived from the new `a1/j0`/`p8/l` smali.  See
 - [docs/file-format.md](docs/file-format.md) — varint, CAV codes, word/offset files.
 - [docs/database.md](docs/database.md) — kata/lema/arti design, column dictionary, query recipes.
 - [docs/schema.sql](docs/schema.sql) — standalone SQLite schema.
+- [docs/audit.md](docs/audit.md) — full raw-data / JSONL / SQLite completeness audit.
 - [docs/references.md](docs/references.md) — local reference files and external links.
 - [docs/diagrams/](docs/diagrams/) — Mermaid sources for the flowcharts.
 
