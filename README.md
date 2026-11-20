@@ -1,4 +1,4 @@
-# KBBI 6.x Dictionary Extractor
+# KBBI Official Android App Extractor
 
 Decrypt, parse, and rebuild the dictionary payload shipped inside the official
 **KBBI** Android app (`yuku.kbbi5`) into a readable SQLite database.
@@ -8,17 +8,17 @@ index files. This repo documents exactly where that data lives, how the key is
 assembled at runtime, and provides a reproducible pipeline from `.xapk` to a
 queryable `kbbi.sqlite`.
 
-| Item | Value |
-| --- | --- |
-| Input | `artifacts/input/kbbi.xapk` (APKPure bundle, committed in-repo) |
-| Package | `yuku.kbbi5` · KBBI 6.2.0 (versionCode 640) |
-| Headwords | 196,195 |
-| Encrypted blocks | 28 (`acu_desc_0.s` … `acu_desc_27.s`) |
-| Decrypted CAV payload | 26,240,696 bytes |
-| Final database | `output/kbbi.sqlite` (~65 MiB) |
-| Cipher | Salsa20/20, then GZIP |
-| Key | `ffef8a8d11f535b73cd24fd31ef296d0573ade68b1f079cbdea460149ed4036e` |
-| Nonce | `fa1f5b7694c268fc` |
+| Item                  | Value                                                              |
+| --------------------- | ------------------------------------------------------------------ |
+| Input                 | `artifacts/input/kbbi.xapk` (APKPure bundle, committed in-repo)    |
+| Package               | `yuku.kbbi5` · KBBI 6.2.0 (versionCode 640)                        |
+| Headwords             | 196,195                                                            |
+| Encrypted blocks      | 28 (`acu_desc_0.s` … `acu_desc_27.s`)                              |
+| Decrypted CAV payload | 26,240,696 bytes                                                   |
+| Final database        | `output/kbbi.sqlite` (~65 MiB)                                     |
+| Cipher                | Salsa20/20, then GZIP                                              |
+| Key                   | `ffef8a8d11f535b73cd24fd31ef296d0573ade68b1f079cbdea460149ed4036e` |
+| Nonce                 | `fa1f5b7694c268fc`                                                 |
 
 > **Data ownership.** The dictionary text belongs to **Badan Pengembangan dan
 > Pembinaan Bahasa, Kemendikdasmen Republik Indonesia**. This project is not
@@ -206,32 +206,32 @@ so there is no install step and no second package manager.
 
 ## Documentation
 
-| Document | Read it for |
-| --- | --- |
-| [`docs/reverse-engineering.md`](docs/reverse-engineering.md) | Full XAPK → APKTool → smali → key walk-through with diagrams |
-| [`docs/decryption.md`](docs/decryption.md) | Cipher, key derivation, verification, troubleshooting |
-| [`docs/file-format.md`](docs/file-format.md) | Binary formats: varint, CAV codes, word/offset/category files |
-| [`docs/extraction.md`](docs/extraction.md) | The runnable pipeline: decrypt → parse → SQLite |
-| [`docs/database.md`](docs/database.md) | Schema, column dictionary, query recipes |
-| [`docs/schema.sql`](docs/schema.sql) | Copy-paste SQL schema |
-| [`docs/audit.md`](docs/audit.md) | Completeness proof: raw vs JSONL vs SQLite |
-| [`docs/references.md`](docs/references.md) | Smali file map + external links |
+| Document                                                     | Read it for                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| [`docs/reverse-engineering.md`](docs/reverse-engineering.md) | Full XAPK → APKTool → smali → key walk-through with diagrams  |
+| [`docs/decryption.md`](docs/decryption.md)                   | Cipher, key derivation, verification, troubleshooting         |
+| [`docs/file-format.md`](docs/file-format.md)                 | Binary formats: varint, CAV codes, word/offset/category files |
+| [`docs/extraction.md`](docs/extraction.md)                   | The runnable pipeline: decrypt → parse → SQLite               |
+| [`docs/database.md`](docs/database.md)                       | Schema, column dictionary, query recipes                      |
+| [`docs/schema.sql`](docs/schema.sql)                         | Copy-paste SQL schema                                         |
+| [`docs/audit.md`](docs/audit.md)                             | Completeness proof: raw vs JSONL vs SQLite                    |
+| [`docs/references.md`](docs/references.md)                   | Smali file map + external links                               |
 
 Start with [`docs/README.md`](docs/README.md) for the suggested reading order.
 
 ## Tasks
 
-| Command | Purpose |
-| --- | --- |
-| `pixi run setup-apktool` | Download APKTool 3.0.3 (checksum-verified) |
-| `pixi run unpack` | XAPK → `artifacts/unpacked/xapk` |
-| `pixi run decode` | base APK → `artifacts/decoded` |
-| `pixi run decrypt` | blocks → `output/dictdata` (28 `.cav` + 435 plaintext files) |
-| `pixi run extract` | `output/kbbi.jsonl` (flat view) |
-| `pixi run db` | `output/kbbi.sqlite` + `output/dokumen/` |
-| `pixi run lookup <kata>` | Readable word lookup (`--json` available) |
-| `pixi run key` / `pixi run info` | Key/nonce + counts |
-| `pixi run test` | Test suite (24 tests) |
+| Command                          | Purpose                                                      |
+| -------------------------------- | ------------------------------------------------------------ |
+| `pixi run setup-apktool`         | Download APKTool 3.0.3 (checksum-verified)                   |
+| `pixi run unpack`                | XAPK → `artifacts/unpacked/xapk`                             |
+| `pixi run decode`                | base APK → `artifacts/decoded`                               |
+| `pixi run decrypt`               | blocks → `output/dictdata` (28 `.cav` + 435 plaintext files) |
+| `pixi run extract`               | `output/kbbi.jsonl` (flat view)                              |
+| `pixi run db`                    | `output/kbbi.sqlite` + `output/dokumen/`                     |
+| `pixi run lookup <kata>`         | Readable word lookup (`--json` available)                    |
+| `pixi run key` / `pixi run info` | Key/nonce + counts                                           |
+| `pixi run test`                  | Test suite (24 tests)                                        |
 
 Change dependencies in `pixi.toml`, then `pixi install`. Commit `pixi.lock`
 with the change. Source edits under `src/` take effect immediately (no
