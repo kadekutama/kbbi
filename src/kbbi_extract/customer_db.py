@@ -1,8 +1,13 @@
-"""Build the customer-facing, denormalized KBBI SQLite database.
+"""Build the customer-facing KBBI SQLite database.
 
-The goal of this database is not to be a search backend.  It is a single,
-readable table that a normal user can open in DB Browser for SQLite, filter by
-``kata``, and understand without joining tables.
+The database is intentionally small and readable:
+
+    kata 1--N lema 1--N arti 1--N contoh
+                         lema 1--N relasi
+
+There are no label lookup tables, no full-text shadow tables, and no
+block/offset pointers.  Multiple values are stored as JSON arrays, which is
+easy to read in DB Browser and trivial to parse in Python/JavaScript.
 """
 
 from __future__ import annotations
@@ -11,50 +16,72 @@ import html
 import json
 import mimetypes
 import re
+import shutil
 import sqlite3
-import unicodedata
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from .dictionary import Dictionary
 from .format import ValueReader, iter_cav
-from .structured import Definition, EntryStructure, parse_entry
+from .structured import Definition, EntryStructure, SubEntry, parse_entry
 
 SCHEMA = """
-CREATE TABLE kbbi (
+CREATE TABLE kata (
     id INTEGER PRIMARY KEY,
     kata TEXT NOT NULL,
+    jenis TEXT NOT NULL DEFAULT '[]',
+    kelas_kata TEXT NOT NULL DEFAULT '[]',
+    bahasa TEXT NOT NULL DEFAULT '[]',
+    bidang TEXT NOT NULL DEFAULT '[]',
+    ragam TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX idx_kata_kata ON kata(kata);
+
+CREATE TABLE lema (
+    id INTEGER PRIMARY KEY,
+    kata_id INTEGER NOT NULL REFERENCES kata(id),
+    urutan INTEGER NOT NULL,
     lema TEXT NOT NULL,
     homograf INTEGER,
     pelafalan TEXT,
     etimologi TEXT,
-    induk TEXT,
-    arti TEXT,
-    contoh TEXT,
-    kelas_kata TEXT,
-    bahasa TEXT,
-    bidang TEXT,
-    ragam TEXT,
-    label TEXT,
-    nama_ilmiah TEXT,
-    rumus_kimia TEXT,
-    turunan TEXT,
-    gabungan_kata TEXT,
-    peribahasa TEXT,
-    kiasan TEXT,
-    varian TEXT,
-    dasar TEXT,
-    bentuk_tidak_baku TEXT,
-    lihat TEXT,
-    rujukan TEXT,
-    jenis TEXT,
-    sumber_blok INTEGER,
-    sumber_offset INTEGER
+    induk TEXT
 );
+CREATE INDEX idx_lema_kata ON lema(kata_id);
 
-CREATE INDEX idx_kbbi_kata ON kbbi(kata);
-CREATE INDEX idx_kbbi_lema ON kbbi(lema);
+CREATE TABLE arti (
+    id INTEGER PRIMARY KEY,
+    lema_id INTEGER NOT NULL REFERENCES lema(id),
+    nomor INTEGER NOT NULL,
+    arti TEXT NOT NULL,
+    kelas_kata TEXT NOT NULL DEFAULT '[]',
+    bahasa TEXT NOT NULL DEFAULT '[]',
+    bidang TEXT NOT NULL DEFAULT '[]',
+    ragam TEXT NOT NULL DEFAULT '[]',
+    label TEXT NOT NULL DEFAULT '[]',
+    nama_ilmiah TEXT NOT NULL DEFAULT '[]',
+    rumus_kimia TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX idx_arti_lema ON arti(lema_id);
+
+CREATE TABLE contoh (
+    id INTEGER PRIMARY KEY,
+    arti_id INTEGER NOT NULL REFERENCES arti(id),
+    urutan INTEGER NOT NULL,
+    teks TEXT NOT NULL
+);
+CREATE INDEX idx_contoh_arti ON contoh(arti_id);
+
+CREATE TABLE relasi (
+    id INTEGER PRIMARY KEY,
+    lema_id INTEGER NOT NULL REFERENCES lema(id),
+    jenis TEXT NOT NULL,
+    target TEXT NOT NULL,
+    konteks TEXT
+);
+CREATE INDEX idx_relasi_lema ON relasi(lema_id);
+CREATE INDEX idx_relasi_jenis ON relasi(jenis);
 
 CREATE TABLE kata_hari_ini (
     urutan INTEGER PRIMARY KEY,
@@ -113,7 +140,7 @@ LABEL_NAMES = {
     "sing": "singkatan",
 }
 
-RELATION_COLUMNS = {
+RELATION_NAMES = {
     "compound": "gabungan_kata",
     "derived": "turunan",
     "proverb": "peribahasa",
@@ -128,12 +155,6 @@ RELATION_COLUMNS = {
 TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 
-def fold(value: str) -> str:
-    """Case- and accent-insensitive comparison key."""
-    decomposed = unicodedata.normalize("NFKD", value.casefold())
-    return "".join(char for char in decomposed if not unicodedata.combining(char))
-
-
 def _read_counted_values(path: Path) -> list[int]:
     reader = ValueReader(path.read_bytes())
     count = reader.read_varint()
@@ -144,6 +165,12 @@ def _read_index(path: Path) -> list[tuple[str, str]]:
     reader = ValueReader(path.read_bytes())
     count = reader.read_varint()
     return [(reader.read_string(), reader.read_string()) for _ in range(count)]
+
+
+def _json_array(values: set[str] | list[str] | None) -> str:
+    if not values:
+        return "[]"
+    return json.dumps(sorted(set(values), key=str.casefold), ensure_ascii=False)
 
 
 def _load_categories(
@@ -179,18 +206,6 @@ def _load_categories(
                 links[entry_id][kind].add(name)
 
     return names, links
-
-
-def _join(values: set[str] | list[str] | None) -> str:
-    if not values:
-        return ""
-    return "; ".join(sorted(set(values), key=str.casefold))
-
-
-def _join_lines(values: set[str] | list[str] | None) -> str:
-    if not values:
-        return ""
-    return "\n".join(sorted(set(values), key=str.casefold))
 
 
 def _render_rich(definition: Definition) -> str:
@@ -233,74 +248,96 @@ def _render_rich(definition: Definition) -> str:
                 parts.append(f"<sup>{value}</sup>")
             else:
                 parts.append(value)
-    return "".join(parts).strip()
+    text = "".join(parts).strip()
+    # A definition is one row; do not leak paragraph newlines into cells.
+    return re.sub(r"\s*\n\s*", " ", text)
 
 
-def _format_arti(definitions: list[Definition]) -> str:
-    lines: list[str] = []
-    for definition in definitions:
-        number = definition.number or definition.ordinal
-        text = _render_rich(definition)
-        if definition.examples and text.endswith((":", ";")):
-            text = text[:-1].rstrip()
-        if text:
-            lines.append(f"{number}. {text}")
-    return "\n".join(lines)
-
-
-def _format_contoh(definitions: list[Definition]) -> str:
-    lines: list[str] = []
-    for definition in definitions:
-        number = definition.number or definition.ordinal
-        for example in definition.examples:
-            lines.append(f"{number}. {example}")
-    return "\n".join(lines)
-
-
-def _label_values(definition: Definition) -> tuple[set[str], set[str], set[str], set[str]]:
+def _definition_arrays(
+    definition: Definition, category_names: dict[tuple[str, str], str]
+) -> tuple[str, str, str, str, str, str, str]:
     pos: set[str] = set()
     languages: set[str] = set()
     fields: set[str] = set()
     registers: set[str] = set()
-    for label in definition.labels:
-        if label.kind == "pos":
-            pos.add(label.value)
-        elif label.kind == "language":
-            languages.add(label.value)
-        elif label.kind == "field":
-            fields.add(label.value)
-        elif label.kind == "register":
-            registers.add(label.value)
-    return pos, languages, fields, registers
-
-
-def _subentry_relations(subentry):
-    values: dict[str, list[str]] = defaultdict(list)
+    labels: set[str] = set()
     scientific: set[str] = set()
     chemical: set[str] = set()
 
+    for label in definition.labels:
+        if label.kind == "pos":
+            pos.add(category_names.get(("word_class", label.value), label.value))
+        elif label.kind == "language":
+            languages.add(category_names.get(("language", label.value), label.value))
+        elif label.kind == "field":
+            fields.add(category_names.get(("field", label.value), label.value))
+        elif label.kind == "register":
+            registers.add(category_names.get(("register", label.value), label.value))
+        elif label.kind == "label":
+            labels.add(LABEL_NAMES.get(label.value, label.value))
+        elif label.kind == "scientific_name":
+            scientific.add(label.value)
+        elif label.kind == "chemical_formula":
+            chemical.add(label.value)
+
+    return (
+        _json_array(pos),
+        _json_array(languages),
+        _json_array(fields),
+        _json_array(registers),
+        _json_array(labels),
+        _json_array(scientific),
+        _json_array(chemical),
+    )
+
+
+def _subentry_relations(
+    subentry: SubEntry,
+) -> list[tuple[str, str, str]]:
+    rows: list[tuple[str, str, str]] = []
     for relation in subentry.relations:
-        column = RELATION_COLUMNS.get(relation.type)
-        if column is None:
+        kind = RELATION_NAMES.get(relation.type)
+        if kind is None:
             continue
-        target = relation.target_text
-        if relation.type == "cross_reference" and relation.context:
-            target = f"{relation.context}: {target}"
-        values[column].append(target)
-
-    for definition in subentry.definitions:
-        for label in definition.labels:
-            if label.kind == "scientific_name":
-                scientific.add(label.value)
-            elif label.kind == "chemical_formula":
-                chemical.add(label.value)
-
-    return values, scientific, chemical
+        context = relation.context if relation.type == "cross_reference" else ""
+        rows.append((kind, relation.target_text, context or ""))
+    return rows
 
 
-def _load_editorial(
-    connection: sqlite3.Connection, source_root: Path | None
-) -> None:
+def _copy_documents(source_root: Path | None, output_root: Path) -> list[tuple[str, str, int]]:
+    """Copy PDF/font assets next to the database and return their rows."""
+    if source_root is None or not source_root.is_dir():
+        return []
+
+    document_root = output_root / "dokumen"
+    if document_root.exists():
+        shutil.rmtree(document_root)
+    rows: list[tuple[str, str, int]] = []
+
+    for subdir in ("docs", "fonts"):
+        source = source_root / subdir
+        if not source.is_dir():
+            continue
+        for path in sorted(source.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(source_root)
+            destination = document_root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, destination)
+            media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            rows.append(
+                (
+                    f"dokumen/{relative.as_posix()}",
+                    media_type,
+                    path.stat().st_size,
+                )
+            )
+
+    return rows
+
+
+def _load_editorial(connection: sqlite3.Connection, source_root: Path | None) -> None:
     if source_root is None or not source_root.is_dir():
         return
 
@@ -330,20 +367,6 @@ def _load_editorial(
                 (path.stem, title, text),
             )
 
-    for subdir in ("docs", "fonts"):
-        directory = source_root / subdir
-        if not directory.is_dir():
-            continue
-        for path in sorted(directory.rglob("*")):
-            if not path.is_file():
-                continue
-            relative = path.relative_to(source_root).as_posix()
-            media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-            connection.execute(
-                "INSERT INTO dokumen(berkas, jenis_media, ukuran) VALUES (?, ?, ?)",
-                (relative, media_type, path.stat().st_size),
-            )
-
 
 def build_database(
     dictdata: str | Path,
@@ -351,7 +374,7 @@ def build_database(
     *,
     source_root: str | Path | None = None,
 ) -> dict[str, int]:
-    """Build the customer-facing SQLite database and return counts."""
+    """Build the customer-facing SQLite database and return row counts."""
     dictdata = Path(dictdata)
     output = Path(output)
     source_root = Path(source_root) if source_root is not None else None
@@ -368,98 +391,132 @@ def build_database(
     connection.execute("PRAGMA synchronous = OFF")
     connection.executescript(SCHEMA)
 
-    rows: list[tuple[Any, ...]] = []
-    definition_count = 0
-    example_count = 0
-    relation_count = 0
+    kata_rows: list[tuple[Any, ...]] = []
+    lema_rows: list[tuple[Any, ...]] = []
+    arti_rows: list[tuple[Any, ...]] = []
+    contoh_rows: list[tuple[Any, ...]] = []
+    relation_rows: list[tuple[Any, ...]] = []
+
+    lema_id = 0
+    arti_id = 0
+    contoh_id = 0
+    relation_id = 0
 
     for index in range(len(dictionary)):
-        entry_id = index + 1
+        kata_id = index + 1
         word = dictionary.words[index]
         ref = dictionary.refs[index]
         reader = ValueReader(dictionary.blocks[ref.file_no], ref.offset)
-        structure = parse_entry(word, iter_cav(reader), dictionary.words)
+        structure: EntryStructure = parse_entry(word, iter_cav(reader), dictionary.words)
 
-        categories = entry_categories.get(entry_id, {})
+        categories = entry_categories.get(kata_id, {})
+
+        # Entry-level categories for the home/menu screens.
+        pos: set[str] = set(categories.get("word_class", set()))
+        languages: set[str] = set(categories.get("language", set()))
+        fields: set[str] = set(categories.get("field", set()))
+        registers: set[str] = set(categories.get("register", set()))
 
         for subentry in structure.subentries:
-            definitions = subentry.definitions
-            relation_values, scientific, chemical = _subentry_relations(subentry)
-            definition_count += len(definitions)
-            example_count += sum(len(definition.examples) for definition in definitions)
-            relation_count += len(subentry.relations)
-
-            pos: set[str] = set(categories.get("word_class", set()))
-            languages: set[str] = set(categories.get("language", set()))
-            fields: set[str] = set(categories.get("field", set()))
-            registers: set[str] = set(categories.get("register", set()))
-            labels: set[str] = set()
-            scientific_names: set[str] = set()
-            chemical_formulas: set[str] = set()
-
-            for definition in definitions:
-                d_pos, d_languages, d_fields, d_registers = _label_values(definition)
-                pos.update(
-                    category_names.get(("word_class", value), value) for value in d_pos
-                )
-                languages.update(
-                    category_names.get(("language", value), value) for value in d_languages
-                )
-                fields.update(
-                    category_names.get(("field", value), value) for value in d_fields
-                )
-                registers.update(
-                    category_names.get(("register", value), value)
-                    for value in d_registers
-                )
+            for definition in subentry.definitions:
                 for label in definition.labels:
-                    if label.kind == "label":
-                        labels.add(LABEL_NAMES.get(label.value, label.value))
-                    elif label.kind == "scientific_name":
-                        scientific_names.add(label.value)
-                    elif label.kind == "chemical_formula":
-                        chemical_formulas.add(label.value)
+                    if label.kind == "pos":
+                        pos.add(category_names.get(("word_class", label.value), label.value))
+                    elif label.kind == "language":
+                        languages.add(
+                            category_names.get(("language", label.value), label.value)
+                        )
+                    elif label.kind == "field":
+                        fields.add(category_names.get(("field", label.value), label.value))
+                    elif label.kind == "register":
+                        registers.add(
+                            category_names.get(("register", label.value), label.value)
+                        )
 
+        kata_rows.append(
+            (
+                kata_id,
+                word,
+                _json_array(categories.get("type", set())),
+                _json_array(pos),
+                _json_array(languages),
+                _json_array(fields),
+                _json_array(registers),
+            )
+        )
+
+        for subentry in structure.subentries:
+            lema_id += 1
+            current_lema_id = lema_id
             parent = ""
             if subentry.parent_entry_id and 1 <= subentry.parent_entry_id <= len(dictionary):
                 parent = dictionary.words[subentry.parent_entry_id - 1]
 
-            row = (
-                None,
-                word,
-                subentry.display_lemma,
-                subentry.homograph,
-                subentry.pronunciation or "",
-                subentry.etymology or "",
-                parent,
-                _format_arti(definitions),
-                _format_contoh(definitions),
-                _join(pos),
-                _join(languages),
-                _join(fields),
-                _join(registers),
-                _join(labels),
-                _join(scientific_names | scientific),
-                _join(chemical_formulas | chemical),
-                _join_lines(relation_values.get("turunan")),
-                _join_lines(relation_values.get("gabungan_kata")),
-                _join_lines(relation_values.get("peribahasa")),
-                _join_lines(relation_values.get("kiasan")),
-                _join_lines(relation_values.get("varian")),
-                _join_lines(relation_values.get("dasar")),
-                _join_lines(relation_values.get("bentuk_tidak_baku")),
-                _join_lines(relation_values.get("lihat")),
-                _join_lines(relation_values.get("rujukan")),
-                _join(categories.get("type", set())),
-                ref.file_no,
-                ref.offset,
+            lema_rows.append(
+                (
+                    current_lema_id,
+                    kata_id,
+                    subentry.ordinal,
+                    subentry.display_lemma,
+                    subentry.homograph,
+                    subentry.pronunciation or "",
+                    subentry.etymology or "",
+                    parent,
+                )
             )
-            rows.append(row)
+
+            for definition in subentry.definitions:
+                arti_id += 1
+                current_arti_id = arti_id
+                arrays = _definition_arrays(definition, category_names)
+                arti_text = _render_rich(definition)
+                if definition.examples and arti_text.endswith((":", ";")):
+                    arti_text = arti_text[:-1].rstrip()
+                arti_rows.append(
+                    (
+                        current_arti_id,
+                        current_lema_id,
+                        definition.number or definition.ordinal,
+                        arti_text,
+                        *arrays,
+                    )
+                )
+
+                for ordinal, example in enumerate(definition.examples, start=1):
+                    contoh_id += 1
+                    contoh_rows.append(
+                        (contoh_id, current_arti_id, ordinal, example)
+                    )
+
+            for relation_type, target, context in _subentry_relations(subentry):
+                relation_id += 1
+                relation_rows.append(
+                    (relation_id, current_lema_id, relation_type, target, context)
+                )
 
     connection.executemany(
-        "INSERT INTO kbbi VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        rows,
+        "INSERT INTO kata(id, kata, jenis, kelas_kata, bahasa, bidang, ragam) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        kata_rows,
+    )
+    connection.executemany(
+        "INSERT INTO lema(id, kata_id, urutan, lema, homograf, pelafalan, etimologi, induk) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        lema_rows,
+    )
+    connection.executemany(
+        "INSERT INTO arti(id, lema_id, nomor, arti, kelas_kata, bahasa, bidang, ragam, "
+        "label, nama_ilmiah, rumus_kimia) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        arti_rows,
+    )
+    connection.executemany(
+        "INSERT INTO contoh(id, arti_id, urutan, teks) VALUES (?, ?, ?, ?)",
+        contoh_rows,
+    )
+    connection.executemany(
+        "INSERT INTO relasi(id, lema_id, jenis, target, konteks) VALUES (?, ?, ?, ?, ?)",
+        relation_rows,
     )
 
     wotd_path = dictdata / "wotd_acu_ids.txt"
@@ -473,25 +530,26 @@ def build_database(
 
     _load_editorial(connection, source_root)
 
+    document_rows = _copy_documents(source_root, output.parent)
+    connection.executemany(
+        "INSERT INTO dokumen(berkas, jenis_media, ukuran) VALUES (?, ?, ?)",
+        document_rows,
+    )
+
     info = {
-        "versi_skema": "2",
+        "versi_skema": "3",
         "sumber_data": str(dictdata),
-        "jumlah_kata": str(len(dictionary)),
-        "jumlah_subentri": str(len(rows)),
-        "jumlah_arti": str(definition_count),
-        "jumlah_contoh": str(example_count),
-        "jumlah_relasi": str(relation_count),
     }
     connection.executemany("INSERT INTO info(kunci, nilai) VALUES (?, ?)", info.items())
     connection.execute("ANALYZE")
     connection.commit()
 
-    connection_counts = {
-        "kata": len(dictionary),
-        "subentri": connection.execute("SELECT COUNT(*) FROM kbbi").fetchone()[0],
-        "arti": definition_count,
-        "contoh": example_count,
-        "relasi": relation_count,
+    counts = {
+        "kata": connection.execute("SELECT COUNT(*) FROM kata").fetchone()[0],
+        "lema": connection.execute("SELECT COUNT(*) FROM lema").fetchone()[0],
+        "arti": connection.execute("SELECT COUNT(*) FROM arti").fetchone()[0],
+        "contoh": connection.execute("SELECT COUNT(*) FROM contoh").fetchone()[0],
+        "relasi": connection.execute("SELECT COUNT(*) FROM relasi").fetchone()[0],
         "kata_hari_ini": connection.execute(
             "SELECT COUNT(*) FROM kata_hari_ini"
         ).fetchone()[0],
@@ -501,5 +559,11 @@ def build_database(
         "tentang": connection.execute("SELECT COUNT(*) FROM tentang").fetchone()[0],
         "dokumen": connection.execute("SELECT COUNT(*) FROM dokumen").fetchone()[0],
     }
+
+    connection.executemany(
+        "INSERT INTO info(kunci, nilai) VALUES (?, ?)",
+        {f"jumlah_{key}": str(value) for key, value in counts.items()}.items(),
+    )
+    connection.commit()
     connection.close()
-    return connection_counts
+    return counts

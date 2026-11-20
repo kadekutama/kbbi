@@ -1,112 +1,161 @@
 # Database design
 
-This database is for **people**, not for a search backend.  The goal is:
+This database is for **people**, not for a search backend.  It is built around
+the structure a reader already understands:
 
-- one obvious table to open in DB Browser for SQLite or Excel;
-- no foreign keys or joins needed for normal use;
-- every word, meaning, example, label, and relation preserved;
-- enough columns to filter and export without reading documentation first.
+```text
+kata 1 ── N lema 1 ── N arti 1 ── N contoh
+                         lema 1 ── N relasi
+```
 
-The output is `output/kbbi.sqlite` (about 49 MiB for KBBI 6.2.0), built with:
+- `kata` — the headword page (`aba`, `elang`, `administrasi umum`)
+- `lema` — the display blocks under that page (`a.ba (1)` … `a.ba (5)`, `e.lang`)
+- `arti` — one meaning/definition per row
+- `contoh` — one example per row
+- `relasi` — one relation per row
+
+There are no label dictionaries, no full-text shadow tables, no block/offset
+columns, and no many-to-many category tables.  Multiple values in a single
+column are JSON arrays.
+
+The output is `output/kbbi.sqlite` (about 67 MiB for KBBI 6.2.0), built with:
 
 ```bash
 pixi run db
 ```
 
-## The main table: `kbbi`
+## Tables
 
-One row per **subentry/page block** — the blocks the app shows under one
-headword.  Examples: `AB (1)`, `e.lang (2)`, `administrasi umum`.
-
-```sql
-SELECT kata, lema, arti, contoh
-FROM kbbi
-WHERE kata = 'elang'
-ORDER BY id;
-```
-
-There are **211,473 rows** for **196,195 headwords**.  A word has multiple
-rows when it has multiple homographs, case variants, or display blocks.
-
-### Columns
+### `kata` — headwords
 
 | Column | Meaning |
 | --- | --- |
-| `id` | Simple row number.  It has no linguistic meaning. |
-| `kata` | Headword as listed in the dictionary (`elang`, `administrasi umum`) |
-| `lema` | Display lemma with syllable dots and homograph marker (`e.lang (1)`, `ab.nor.mal`) |
-| `homograf` | Homograph number parsed from `(1)`, `(2)`, … |
-| `pelafalan` | Pronunciation, e.g. `êlang` |
-| `etimologi` | Etymology, when present |
-| `induk` | Parent headword for subentries, e.g. `administrasi` for `administrasi umum` |
-| `arti` | All definitions for this block, one per line, with labels and formatting |
-| `contoh` | Usage examples, numbered to match the definitions |
-| `kelas_kata` | Full class names, e.g. `Nomina`, `Verba`; multiple values separated by `; ` |
-| `bahasa` | Source-language names, e.g. `Sunda`, `Jawa` |
-| `bidang` | Subject fields, e.g. `Administrasi dan Kepegawaian` |
-| `ragam` | Register names, e.g. `Arkais`, `Cakapan` |
-| `label` | Full label names: `kiasan`, `singkatan`, `akronim`, `ungkapan`, `kependekan` |
-| `nama_ilmiah` | Scientific names, e.g. `Accipitridae` |
-| `rumus_kimia` | Chemical formulas |
-| `turunan` | Derived words, one per line |
-| `gabungan_kata` | Compound words, one per line |
-| `peribahasa` | Proverbs, one per line |
-| `kiasan` | Figurative expressions, one per line |
-| `varian` | Variant forms, one per line |
-| `dasar` | Base words, one per line |
-| `bentuk_tidak_baku` | Nonstandard forms, one per line |
-| `lihat` | “lihat …” references, one per line |
-| `rujukan` | Other cross-references, one per line; includes context when present |
-| `jenis` | Entry types, e.g. `Kata Dasar`, `Kata Turunan`, `Gabungan Kata` |
-| `sumber_blok` | Source `acu_desc_N.s` block |
-| `sumber_offset` | Offset in the decrypted CAV stream |
+| `id` | Simple integer ID |
+| `kata` | Headword (`aba`, `elang`, `administrasi umum`) |
+| `jenis` | JSON array of entry types, e.g. `["Kata Dasar"]` |
+| `kelas_kata` | JSON array of class names, e.g. `["Nomina", "Verba"]` |
+| `bahasa` | JSON array of source-language names |
+| `bidang` | JSON array of subject fields |
+| `ragam` | JSON array of register names |
 
-### What `arti` looks like
+These categories come from the app’s own category files, so the home and
+category screens keep their original membership.
 
-`arti` is a readable multi-line string.  It uses the same markers as the
-source/app:
+### `lema` — subentries/page blocks
 
-```text
-1. [n] <Sd> sebutan untuk anak lelaki sultan Cirebon
-2. [n] keranjang bambu untuk membawa berbagai barang dengan cara dipikul
-```
+| Column | Meaning |
+| --- | --- |
+| `id` | Simple integer ID |
+| `kata_id` | References `kata.id` |
+| `urutan` | Order on the headword page |
+| `lema` | Display lemma with syllable dots (`a.ba (1)`, `ab.nor.mal`) |
+| `homograf` | Homograph number |
+| `pelafalan` | Pronunciation (`êlang`) |
+| `etimologi` | Etymology |
+| `induk` | Parent headword for subentries (`administrasi` for `administrasi umum`) |
 
-- `[n]` — part of speech
-- `<Sd>` — source language
-- `{Adm}` — subject field
-- `(ark)` — register
-- `sing`, `ki`, `akr`, … — labels
-- `<i>…</i>`, `<b>…</b>`, `<sub>…</sub>`, `<sup>…</sup>` — inline formatting
+A word with five lemas — like `aba` — has one `kata` row and five `lema` rows.
 
-The tags are only for reading/formatting.  They do not hide any text.
+### `arti` — meanings
 
-### `contoh`
+| Column | Meaning |
+| --- | --- |
+| `id` | Simple integer ID |
+| `lema_id` | References `lema.id` |
+| `nomor` | Definition number inside the lemma |
+| `arti` | One definition, with labels and inline formatting |
+| `kelas_kata` | JSON array of class names for this definition |
+| `bahasa` | JSON array of source languages for this definition |
+| `bidang` | JSON array of fields for this definition |
+| `ragam` | JSON array of registers for this definition |
+| `label` | JSON array of labels (`kiasan`, `singkatan`, …) |
+| `nama_ilmiah` | JSON array of scientific names |
+| `rumus_kimia` | JSON array of chemical formulas |
 
-Examples are numbered to the same definition number:
+`arti` uses the same readable markers as the source:
 
 ```text
-1. sejak kecelakaan itu dia menjadi --
-1. contoh lain untuk definisi pertama
-2. contoh untuk definisi kedua
+[n] <Sd> sebutan untuk anak lelaki sultan Cirebon
 ```
 
-This preserves which example belongs to which meaning without a join.
+`[n]` is part of speech, `<Sd>` language, `{Adm}` field, `(ark)` register, and
+`<i>…</i>` is formatting.  It is one definition per row, so there are no
+newline-separated lists.
 
-## Small companion tables
+### `contoh` — examples
 
-These are independent and optional:
+| Column | Meaning |
+| --- | --- |
+| `id` | Simple integer ID |
+| `arti_id` | References `arti.id` |
+| `urutan` | Example order within the definition |
+| `teks` | Example text |
+
+Examples are rows, not a JSON array or a newline-separated cell, because they
+belong to a specific meaning.
+
+### `relasi` — related words
+
+| Column | Meaning |
+| --- | --- |
+| `id` | Simple integer ID |
+| `lema_id` | References `lema.id` |
+| `jenis` | Relation type |
+| `target` | Related word |
+| `konteks` | Context for `rujukan`, otherwise empty |
+
+Relation types: `turunan`, `gabungan_kata`, `peribahasa`, `kiasan`, `varian`,
+`dasar`, `bentuk_tidak_baku`, `lihat`, `rujukan`.
+
+One relation per row, so “Gabungan kata” with 27 items is 27 rows, not one
+large cell.
+
+### Companion tables
 
 | Table | Contents |
 | --- | --- |
-| `kata_hari_ini` | Word-of-the-day sequence (`urutan`, `kata`) |
-| `kata_tahun_ini` | Kata Tahun Ini HTML (`tahun`, `judul`, `isi_html`) |
-| `tentang` | About pages (`halaman`, `judul`, `isi_html`) |
-| `dokumen` | PDF/font files (`berkas`, `jenis_media`, `ukuran`) |
-| `info` | Build metadata and counts (`kunci`, `nilai`) |
+| `kata_hari_ini` | Word-of-the-day sequence |
+| `kata_tahun_ini` | Kata Tahun Ini HTML (2019–2025) |
+| `tentang` | About pages |
+| `dokumen` | PDF/font metadata; files are copied to `output/dokumen/` |
+| `info` | Build metadata and counts |
+
+`dokumen.berkas` is relative to the output folder, for example
+`dokumen/docs/tanda_dan_lambang.pdf`.  The actual PDF and font-license files
+live next to the database, not inside the original decoded APK tree.
+
+## Multiple values are JSON arrays
+
+For example, this is how `aba` looks:
+
+```sql
+SELECT * FROM kata WHERE kata = 'aba';
+```
+
+```text
+kata:       aba
+jenis:      ["Kata Dasar"]
+kelas_kata: ["Nomina", "Verba"]
+bahasa:     ["Lundayeh", "Manggarai", "Marlasi"]
+bidang:     []
+ragam:      []
+```
+
+And its five lemas:
+
+```sql
+SELECT id, urutan, lema, homograf
+FROM lema
+WHERE kata_id = (SELECT id FROM kata WHERE kata = 'aba')
+ORDER BY urutan;
+```
+
+No cell contains newline-separated values.  Arrays are valid JSON and can be
+read by DB Browser, Python, JavaScript, or any SQLite client.
 
 ## Using the database
 
-### Without SQL
+### Lookup without SQL
 
 ```bash
 pixi run lookup abnormal
@@ -114,71 +163,81 @@ pixi run lookup elang
 pixi run lookup elang --json
 ```
 
-### With SQL
+### SQL examples
 
 ```sql
--- Exact word
-SELECT * FROM kbbi WHERE kata = 'elang' ORDER BY id;
+-- Find a word and its lemas
+SELECT k.kata, l.urutan, l.lema, l.homograf, l.pelafalan
+FROM kata k
+JOIN lema l ON l.kata_id = k.id
+WHERE k.kata = 'elang'
+ORDER BY l.urutan;
 
--- Prefix
-SELECT kata, lema, arti FROM kbbi
-WHERE kata LIKE 'elang%'
-ORDER BY length(kata), kata;
+-- Find one definition and its examples
+SELECT k.kata, l.lema, a.nomor, a.arti, c.teks AS contoh
+FROM kata k
+JOIN lema l ON l.kata_id = k.id
+JOIN arti a ON a.lema_id = l.id
+LEFT JOIN contoh c ON c.arti_id = a.id
+WHERE k.kata = 'abnormal'
+ORDER BY l.urutan, a.nomor, c.urutan;
+
+-- Related words
+SELECT k.kata, l.lema, r.jenis, r.target
+FROM kata k
+JOIN lema l ON l.kata_id = k.id
+JOIN relasi r ON r.lema_id = l.id
+WHERE k.kata = 'elang'
+ORDER BY l.urutan, r.id;
 
 -- Filter by class
-SELECT kata, lema, arti FROM kbbi
-WHERE kelas_kata LIKE '%Nomina%'
+SELECT DISTINCT k.kata
+FROM kata k
+WHERE k.kelas_kata LIKE '%Nomina%'
 LIMIT 50;
 
--- Search examples
-SELECT kata, contoh FROM kbbi
-WHERE contoh LIKE '%masker%';
-
--- Words with compound forms
-SELECT kata, gabungan_kata FROM kbbi
-WHERE gabungan_kata <> '';
-
--- Word of the day
-SELECT k.urutan, k.kata
-FROM kata_hari_ini k
-ORDER BY k.urutan;
-
 -- Kata Tahun Ini
-SELECT tahun, judul, isi_html
-FROM kata_tahun_ini
-ORDER BY tahun;
+SELECT tahun, judul FROM kata_tahun_ini ORDER BY tahun;
 ```
 
-Exporting a filtered result to CSV or Excel works directly from DB Browser;
-there is nothing to join.
+## Counts
 
-## Is anything lost?
+| Table | Rows |
+| --- | ---: |
+| `kata` | 196,195 |
+| `lema` | 211,473 |
+| `arti` | 233,820 |
+| `contoh` | 47,792 |
+| `relasi` | 116,439 |
+| `kata_hari_ini` | 6,974 |
+| `kata_tahun_ini` | 7 |
+| `tentang` | 2 |
+| `dokumen` | 2 |
+
+## Is information lost?
 
 No:
 
-- **196,195** headwords are represented.
-- **211,473** subentry blocks get a row, including blocks that only contain
-  relations and no definition.
-- **233,820** definitions are in `arti`.
-- **47,792** examples are in `contoh`.
-- **116,439** relations are distributed into the relation columns.
-- Labels, scientific names, chemical formulas, category names, KTI pages,
-  about pages, and documents are all present.
+- Every headword gets a `kata` row.
+- Every display block gets a `lema` row, including blocks with no definition
+  but with relations.
+- Every definition gets an `arti` row.
+- Every example gets a `contoh` row.
+- Every relation gets a `relasi` row.
+- Labels, categories, scientific names, chemical formulas, KTI pages, about
+  pages, and documents are all retained.
 - Inline formatting is retained as readable tags in `arti`.
 
-The original normalized schema was technically precise but difficult for a
-normal user.  This version deliberately repeats the headword/lemma in each row
-so that every row is understandable on its own.
+## Notes
 
-## `kata` vs `lema`
-
-- `kata` is the dictionary headword used for lookup (`elang`, `abnormal`).
-- `lema` is the displayed form with syllable dots and homograph markers
-  (`e.lang (1)`, `ab.nor.mal`).
-
-There is no separate folded column in this customer-facing database.  Use
-`COLLATE NOCASE` or `LIKE` for case-insensitive searches; the data is kept in
-its original spelling.
+- `sumber_blok` and `sumber_offset` from the previous design were internal
+  CAV provenance pointers.  They were not useful to a normal reader and are no
+  longer in the customer tables.
+- `kata` is the headword; `lema` is the displayed syllabified form.  They are
+  deliberately separate.
+- The previous single `kbbi` table was split into `kata`/`lema`/`arti` because
+  a word can have multiple lemas and meanings; this keeps each concept tidy
+  without creating a large number of lookup tables.
 
 ## Regenerating after a KBBI update
 
@@ -187,14 +246,6 @@ pixi run decrypt    # only if the decrypted dictdata changed
 pixi run db
 ```
 
-`pixi run db` rebuilds the whole file from `output/dictdata`.  The builder is
-data-driven for word/subentry/definition/relation counts, categories, KTI
-pages, and about pages.  If a new app version changes the key, nonce, or CAV
-format, re-run the key derivation first (see
-[`decryption.md`](decryption.md)).
-
-The build is also recorded in `info`:
-
-```sql
-SELECT * FROM info;
-```
+`pixi run db` rebuilds the database and copies `docs`/`fonts` into
+`output/dokumen/`.  If a new app version changes the key, nonce, or CAV format,
+re-run the key derivation first (see [`decryption.md`](decryption.md)).

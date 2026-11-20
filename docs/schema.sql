@@ -1,5 +1,28 @@
 -- KBBI customer-facing SQLite schema (generated from output/kbbi.sqlite)
 
+-- table: arti
+CREATE TABLE arti (
+    id INTEGER PRIMARY KEY,
+    lema_id INTEGER NOT NULL REFERENCES lema(id),
+    nomor INTEGER NOT NULL,
+    arti TEXT NOT NULL,
+    kelas_kata TEXT NOT NULL DEFAULT '[]',
+    bahasa TEXT NOT NULL DEFAULT '[]',
+    bidang TEXT NOT NULL DEFAULT '[]',
+    ragam TEXT NOT NULL DEFAULT '[]',
+    label TEXT NOT NULL DEFAULT '[]',
+    nama_ilmiah TEXT NOT NULL DEFAULT '[]',
+    rumus_kimia TEXT NOT NULL DEFAULT '[]'
+);
+
+-- table: contoh
+CREATE TABLE contoh (
+    id INTEGER PRIMARY KEY,
+    arti_id INTEGER NOT NULL REFERENCES arti(id),
+    urutan INTEGER NOT NULL,
+    teks TEXT NOT NULL
+);
+
 -- table: dokumen
 CREATE TABLE dokumen (
     berkas TEXT PRIMARY KEY,
@@ -11,6 +34,17 @@ CREATE TABLE dokumen (
 CREATE TABLE info (
     kunci TEXT PRIMARY KEY,
     nilai TEXT NOT NULL
+);
+
+-- table: kata
+CREATE TABLE kata (
+    id INTEGER PRIMARY KEY,
+    kata TEXT NOT NULL,
+    jenis TEXT NOT NULL DEFAULT '[]',
+    kelas_kata TEXT NOT NULL DEFAULT '[]',
+    bahasa TEXT NOT NULL DEFAULT '[]',
+    bidang TEXT NOT NULL DEFAULT '[]',
+    ragam TEXT NOT NULL DEFAULT '[]'
 );
 
 -- table: kata_hari_ini
@@ -26,36 +60,25 @@ CREATE TABLE kata_tahun_ini (
     isi_html TEXT NOT NULL
 );
 
--- table: kbbi
-CREATE TABLE kbbi (
+-- table: lema
+CREATE TABLE lema (
     id INTEGER PRIMARY KEY,
-    kata TEXT NOT NULL,
+    kata_id INTEGER NOT NULL REFERENCES kata(id),
+    urutan INTEGER NOT NULL,
     lema TEXT NOT NULL,
     homograf INTEGER,
     pelafalan TEXT,
     etimologi TEXT,
-    induk TEXT,
-    arti TEXT,
-    contoh TEXT,
-    kelas_kata TEXT,
-    bahasa TEXT,
-    bidang TEXT,
-    ragam TEXT,
-    label TEXT,
-    nama_ilmiah TEXT,
-    rumus_kimia TEXT,
-    turunan TEXT,
-    gabungan_kata TEXT,
-    peribahasa TEXT,
-    kiasan TEXT,
-    varian TEXT,
-    dasar TEXT,
-    bentuk_tidak_baku TEXT,
-    lihat TEXT,
-    rujukan TEXT,
-    jenis TEXT,
-    sumber_blok INTEGER,
-    sumber_offset INTEGER
+    induk TEXT
+);
+
+-- table: relasi
+CREATE TABLE relasi (
+    id INTEGER PRIMARY KEY,
+    lema_id INTEGER NOT NULL REFERENCES lema(id),
+    jenis TEXT NOT NULL,
+    target TEXT NOT NULL,
+    konteks TEXT
 );
 
 -- table: tentang
@@ -65,8 +88,20 @@ CREATE TABLE tentang (
     isi_html TEXT NOT NULL
 );
 
--- index: idx_kbbi_kata
-CREATE INDEX idx_kbbi_kata ON kbbi(kata);
+-- index: idx_arti_lema
+CREATE INDEX idx_arti_lema ON arti(lema_id);
 
--- index: idx_kbbi_lema
-CREATE INDEX idx_kbbi_lema ON kbbi(lema);
+-- index: idx_contoh_arti
+CREATE INDEX idx_contoh_arti ON contoh(arti_id);
+
+-- index: idx_kata_kata
+CREATE INDEX idx_kata_kata ON kata(kata);
+
+-- index: idx_lema_kata
+CREATE INDEX idx_lema_kata ON lema(kata_id);
+
+-- index: idx_relasi_jenis
+CREATE INDEX idx_relasi_jenis ON relasi(jenis);
+
+-- index: idx_relasi_lema
+CREATE INDEX idx_relasi_lema ON relasi(lema_id);

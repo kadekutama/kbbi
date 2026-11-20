@@ -14,7 +14,7 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 | Headwords | 196,195 |
 | Description blocks | 28 (`acu_desc_0.s` … `acu_desc_27.s`) |
 | Decrypted CAV data | 26,240,696 bytes |
-| SQLite output | `output/kbbi.sqlite` (49 MiB) |
+| SQLite output | `output/kbbi.sqlite` (67 MiB) |
 | Cipher | Salsa20/20, then GZIP |
 | Key | `ffef8a8d11f535b73cd24fd31ef296d0573ade68b1f079cbdea460149ed4036e` |
 | Nonce | `fa1f5b7694c268fc` |
@@ -37,7 +37,7 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 │   ├── format.py              # ValueReader + CAV parser
 │   ├── structured.py          # subentries, definitions, labels, relations
 │   ├── dictionary.py          # word list, offsets, entry access
-│   ├── customer_db.py         # single-table SQLite builder
+│   ├── customer_db.py         # readable kata/lema/arti SQLite builder
 │   ├── cli.py                 # CLI implementation
 │   └── paths.py               # default source-checkout paths
 ├── scripts/
@@ -92,7 +92,7 @@ pixi run decrypt
 output/
 ├── dictdata/          # 28 decrypted .cav blocks + 435 plaintext files
 ├── kbbi.jsonl         # 196,195 flat entries
-└── kbbi.sqlite        # customer-friendly single-table database (recommended)
+└── kbbi.sqlite        # customer-friendly kata/lema/arti database (recommended)
 ```
 
 Build the customer-friendly database:
@@ -111,9 +111,11 @@ pixi run lookup elang --json
 For ad-hoc SQL, start with the convenience view:
 
 ```sql
-SELECT kata, lema, arti, contoh, kelas_kata, gabungan_kata
-FROM kbbi
-WHERE kata = 'abnormal';
+SELECT k.kata, l.lema, a.nomor, a.arti
+FROM kata k
+JOIN lema l ON l.kata_id = k.id
+JOIN arti a ON a.lema_id = l.id
+WHERE k.kata = 'abnormal';
 ```
 
 To extract the flat JSONL view as well:
@@ -237,7 +239,7 @@ error and the key must be re-derived from the new `a1/j0`/`p8/l` smali.  See
 - [docs/reverse-engineering.md](docs/reverse-engineering.md) — XAPK → APKTool → smali → key.
 - [docs/decryption.md](docs/decryption.md) — cipher, key, CLI, verification.
 - [docs/file-format.md](docs/file-format.md) — varint, CAV codes, word/offset files.
-- [docs/database.md](docs/database.md) — single-table design, column dictionary, query recipes.
+- [docs/database.md](docs/database.md) — kata/lema/arti design, column dictionary, query recipes.
 - [docs/schema.sql](docs/schema.sql) — standalone SQLite schema.
 - [docs/references.md](docs/references.md) — local reference files and external links.
 - [docs/diagrams/](docs/diagrams/) — Mermaid sources for the flowcharts.

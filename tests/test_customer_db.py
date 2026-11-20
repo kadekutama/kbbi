@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -38,31 +39,55 @@ def test_build_customer_database(tmp_path: Path) -> None:
         "<html><title>Kata Tahun Ini 2025</title><h1>contoh</h1></html>",
         encoding="utf-8",
     )
+    (source / "docs").mkdir()
+    (source / "docs" / "panduan.txt").write_text("panduan", encoding="utf-8")
 
-    database = tmp_path / "kbbi.sqlite"
+    database = tmp_path / "output" / "kbbi.sqlite"
     stats = build_database(dictdata, database, source_root=source)
 
-    assert stats["kata"] == 1
-    assert stats["subentri"] == 1
-    assert stats["arti"] == 1
-    assert stats["contoh"] == 1
-    assert stats["relasi"] == 1
-    assert stats["kata_hari_ini"] == 1
-    assert stats["kata_tahun_ini"] == 1
+    assert stats == {
+        "kata": 1,
+        "lema": 1,
+        "arti": 1,
+        "contoh": 1,
+        "relasi": 1,
+        "kata_hari_ini": 1,
+        "kata_tahun_ini": 1,
+        "tentang": 0,
+        "dokumen": 1,
+    }
 
     connection = sqlite3.connect(database)
     connection.row_factory = sqlite3.Row
     try:
-        row = connection.execute(
-            "SELECT kata, lema, arti, contoh, kelas_kata, gabungan_kata "
-            "FROM kbbi WHERE kata = 'rumah'"
+        kata = connection.execute(
+            "SELECT * FROM kata WHERE kata = 'rumah'"
         ).fetchone()
-        assert row["kata"] == "rumah"
-        assert row["lema"] == "rumah"
-        assert row["arti"] == "1. [n] definisi"
-        assert row["contoh"] == "1. contoh"
-        assert row["kelas_kata"] == "Nomina"
-        assert row["gabungan_kata"] == "rumah"
+        assert kata["id"] == 1
+        assert json.loads(kata["kelas_kata"]) == ["Nomina"]
+
+        lemma = connection.execute(
+            "SELECT * FROM lema WHERE kata_id = 1"
+        ).fetchone()
+        assert lemma["lema"] == "rumah"
+
+        definition = connection.execute(
+            "SELECT * FROM arti WHERE lema_id = ?", (lemma["id"],)
+        ).fetchone()
+        assert definition["nomor"] == 1
+        assert definition["arti"] == "[n] definisi"
+        assert json.loads(definition["kelas_kata"]) == ["Nomina"]
+
+        example = connection.execute(
+            "SELECT * FROM contoh WHERE arti_id = ?", (definition["id"],)
+        ).fetchone()
+        assert example["teks"] == "contoh"
+
+        relation = connection.execute(
+            "SELECT * FROM relasi WHERE lema_id = ?", (lemma["id"],)
+        ).fetchone()
+        assert relation["jenis"] == "gabungan_kata"
+        assert relation["target"] == "rumah"
 
         assert connection.execute(
             "SELECT kata FROM kata_hari_ini WHERE urutan = 1"
@@ -70,5 +95,11 @@ def test_build_customer_database(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT judul FROM kata_tahun_ini WHERE tahun = 2025"
         ).fetchone()["judul"] == "Kata Tahun Ini 2025"
+        assert connection.execute(
+            "SELECT berkas FROM dokumen"
+        ).fetchone()["berkas"] == "dokumen/docs/panduan.txt"
+        assert (database.parent / "dokumen" / "docs" / "panduan.txt").read_text(
+            encoding="utf-8"
+        ) == "panduan"
     finally:
         connection.close()
