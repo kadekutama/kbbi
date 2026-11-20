@@ -41,7 +41,6 @@ CREATE INDEX idx_kata_kata ON kata(kata);
 CREATE TABLE lema (
     id INTEGER PRIMARY KEY,
     kata_id INTEGER NOT NULL REFERENCES kata(id),
-    urutan INTEGER NOT NULL,
     lema TEXT NOT NULL,
     homograf INTEGER,
     pelafalan TEXT,
@@ -58,12 +57,18 @@ CREATE TABLE arti (
     kelas_kata TEXT NOT NULL DEFAULT '[]',
     bahasa TEXT NOT NULL DEFAULT '[]',
     bidang TEXT NOT NULL DEFAULT '[]',
-    ragam TEXT NOT NULL DEFAULT '[]',
-    label TEXT NOT NULL DEFAULT '[]',
-    nama_ilmiah TEXT NOT NULL DEFAULT '[]',
-    rumus_kimia TEXT NOT NULL DEFAULT '[]'
+    ragam TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX idx_arti_lema ON arti(lema_id);
+
+CREATE TABLE arti_metadata (
+    id INTEGER PRIMARY KEY,
+    arti_id INTEGER NOT NULL REFERENCES arti(id),
+    kunci TEXT NOT NULL,
+    nilai TEXT NOT NULL
+);
+CREATE INDEX idx_arti_metadata_arti ON arti_metadata(arti_id);
+CREATE INDEX idx_arti_metadata_kunci ON arti_metadata(kunci);
 
 CREATE TABLE contoh (
     id INTEGER PRIMARY KEY,
@@ -255,14 +260,11 @@ def _render_rich(definition: Definition) -> str:
 
 def _definition_arrays(
     definition: Definition, category_names: dict[tuple[str, str], str]
-) -> tuple[str, str, str, str, str, str, str]:
+) -> tuple[str, str, str, str]:
     pos: set[str] = set()
     languages: set[str] = set()
     fields: set[str] = set()
     registers: set[str] = set()
-    labels: set[str] = set()
-    scientific: set[str] = set()
-    chemical: set[str] = set()
 
     for label in definition.labels:
         if label.kind == "pos":
@@ -273,22 +275,25 @@ def _definition_arrays(
             fields.add(category_names.get(("field", label.value), label.value))
         elif label.kind == "register":
             registers.add(category_names.get(("register", label.value), label.value))
-        elif label.kind == "label":
-            labels.add(LABEL_NAMES.get(label.value, label.value))
-        elif label.kind == "scientific_name":
-            scientific.add(label.value)
-        elif label.kind == "chemical_formula":
-            chemical.add(label.value)
 
     return (
         _json_array(pos),
         _json_array(languages),
         _json_array(fields),
         _json_array(registers),
-        _json_array(labels),
-        _json_array(scientific),
-        _json_array(chemical),
     )
+
+
+def _definition_metadata(definition: Definition) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for label in definition.labels:
+        if label.kind == "label":
+            rows.append(("label", LABEL_NAMES.get(label.value, label.value)))
+        elif label.kind == "scientific_name":
+            rows.append(("nama_ilmiah", label.value))
+        elif label.kind == "chemical_formula":
+            rows.append(("rumus_kimia", label.value))
+    return rows
 
 
 def _subentry_relations(
@@ -394,11 +399,13 @@ def build_database(
     kata_rows: list[tuple[Any, ...]] = []
     lema_rows: list[tuple[Any, ...]] = []
     arti_rows: list[tuple[Any, ...]] = []
+    metadata_rows: list[tuple[Any, ...]] = []
     contoh_rows: list[tuple[Any, ...]] = []
     relation_rows: list[tuple[Any, ...]] = []
 
     lema_id = 0
     arti_id = 0
+    metadata_id = 0
     contoh_id = 0
     relation_id = 0
 
@@ -456,8 +463,7 @@ def build_database(
                 (
                     current_lema_id,
                     kata_id,
-                    subentry.ordinal,
-                    subentry.display_lemma,
+                    subentry.lemma_base,
                     subentry.homograph,
                     subentry.pronunciation or "",
                     subentry.etymology or "",
@@ -482,6 +488,12 @@ def build_database(
                     )
                 )
 
+                for key, value in _definition_metadata(definition):
+                    metadata_id += 1
+                    metadata_rows.append(
+                        (metadata_id, current_arti_id, key, value)
+                    )
+
                 for ordinal, example in enumerate(definition.examples, start=1):
                     contoh_id += 1
                     contoh_rows.append(
@@ -500,15 +512,18 @@ def build_database(
         kata_rows,
     )
     connection.executemany(
-        "INSERT INTO lema(id, kata_id, urutan, lema, homograf, pelafalan, etimologi, induk) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO lema(id, kata_id, lema, homograf, pelafalan, etimologi, induk) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         lema_rows,
     )
     connection.executemany(
-        "INSERT INTO arti(id, lema_id, nomor, arti, kelas_kata, bahasa, bidang, ragam, "
-        "label, nama_ilmiah, rumus_kimia) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO arti(id, lema_id, nomor, arti, kelas_kata, bahasa, bidang, ragam) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         arti_rows,
+    )
+    connection.executemany(
+        "INSERT INTO arti_metadata(id, arti_id, kunci, nilai) VALUES (?, ?, ?, ?)",
+        metadata_rows,
     )
     connection.executemany(
         "INSERT INTO contoh(id, arti_id, urutan, teks) VALUES (?, ?, ?, ?)",
@@ -536,18 +551,25 @@ def build_database(
         document_rows,
     )
 
+    try:
+        source_label = dictdata.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        source_label = dictdata.name
+
     info = {
         "versi_skema": "3",
-        "sumber_data": str(dictdata),
+        "sumber_data": source_label,
     }
     connection.executemany("INSERT INTO info(kunci, nilai) VALUES (?, ?)", info.items())
-    connection.execute("ANALYZE")
     connection.commit()
 
     counts = {
         "kata": connection.execute("SELECT COUNT(*) FROM kata").fetchone()[0],
         "lema": connection.execute("SELECT COUNT(*) FROM lema").fetchone()[0],
         "arti": connection.execute("SELECT COUNT(*) FROM arti").fetchone()[0],
+        "arti_metadata": connection.execute(
+            "SELECT COUNT(*) FROM arti_metadata"
+        ).fetchone()[0],
         "contoh": connection.execute("SELECT COUNT(*) FROM contoh").fetchone()[0],
         "relasi": connection.execute("SELECT COUNT(*) FROM relasi").fetchone()[0],
         "kata_hari_ini": connection.execute(

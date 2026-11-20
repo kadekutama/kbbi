@@ -18,7 +18,7 @@ There are no label dictionaries, no full-text shadow tables, no block/offset
 columns, and no many-to-many category tables.  Multiple values in a single
 column are JSON arrays.
 
-The output is `output/kbbi.sqlite` (about 67 MiB for KBBI 6.2.0), built with:
+The output is `output/kbbi.sqlite` (about 65 MiB for KBBI 6.2.0), built with:
 
 ```bash
 pixi run db
@@ -45,10 +45,9 @@ category screens keep their original membership.
 
 | Column | Meaning |
 | --- | --- |
-| `id` | Simple integer ID |
+| `id` | Simple integer ID, also the page order |
 | `kata_id` | References `kata.id` |
-| `urutan` | Order on the headword page |
-| `lema` | Display lemma with syllable dots (`a.ba (1)`, `ab.nor.mal`) |
+| `lema` | Display lemma with syllable dots, without the `(n)` suffix (`a.ba`, `e.lang`) |
 | `homograf` | Homograph number |
 | `pelafalan` | Pronunciation (`êlang`) |
 | `etimologi` | Etymology |
@@ -68,9 +67,6 @@ A word with five lemas — like `aba` — has one `kata` row and five `lema` row
 | `bahasa` | JSON array of source languages for this definition |
 | `bidang` | JSON array of fields for this definition |
 | `ragam` | JSON array of registers for this definition |
-| `label` | JSON array of labels (`kiasan`, `singkatan`, …) |
-| `nama_ilmiah` | JSON array of scientific names |
-| `rumus_kimia` | JSON array of chemical formulas |
 
 `arti` uses the same readable markers as the source:
 
@@ -81,6 +77,28 @@ A word with five lemas — like `aba` — has one `kata` row and five `lema` row
 `[n]` is part of speech, `<Sd>` language, `{Adm}` field, `(ark)` register, and
 `<i>…</i>` is formatting.  It is one definition per row, so there are no
 newline-separated lists.
+
+### `arti_metadata` — optional details
+
+Some details are rare and do not deserve a dedicated column.  They live in a
+generic key/value table:
+
+| Column | Meaning |
+| --- | --- |
+| `id` | Simple integer ID |
+| `arti_id` | References `arti.id` |
+| `kunci` | `label`, `nama_ilmiah`, or `rumus_kimia` |
+| `nilai` | The value |
+
+Example rows:
+
+```text
+arti_id: 392, kunci: label,       nilai: singkatan
+arti_id: 123, kunci: nama_ilmiah, nilai: Accipitridae
+```
+
+Use this table for details that are not common enough to be a column.  The
+main `arti` columns stay stable and readable.
 
 ### `contoh` — examples
 
@@ -144,10 +162,10 @@ ragam:      []
 And its five lemas:
 
 ```sql
-SELECT id, urutan, lema, homograf
+SELECT id, lema, homograf
 FROM lema
 WHERE kata_id = (SELECT id FROM kata WHERE kata = 'aba')
-ORDER BY urutan;
+ORDER BY id;
 ```
 
 No cell contains newline-separated values.  Arrays are valid JSON and can be
@@ -167,11 +185,11 @@ pixi run lookup elang --json
 
 ```sql
 -- Find a word and its lemas
-SELECT k.kata, l.urutan, l.lema, l.homograf, l.pelafalan
+SELECT k.kata, l.lema, l.homograf, l.pelafalan
 FROM kata k
 JOIN lema l ON l.kata_id = k.id
 WHERE k.kata = 'elang'
-ORDER BY l.urutan;
+ORDER BY l.id;
 
 -- Find one definition and its examples
 SELECT k.kata, l.lema, a.nomor, a.arti, c.teks AS contoh
@@ -180,7 +198,16 @@ JOIN lema l ON l.kata_id = k.id
 JOIN arti a ON a.lema_id = l.id
 LEFT JOIN contoh c ON c.arti_id = a.id
 WHERE k.kata = 'abnormal'
-ORDER BY l.urutan, a.nomor, c.urutan;
+ORDER BY l.id, a.nomor, c.urutan;
+
+-- Optional details such as scientific names or labels
+SELECT k.kata, l.lema, a.nomor, m.kunci, m.nilai
+FROM kata k
+JOIN lema l ON l.kata_id = k.id
+JOIN arti a ON a.lema_id = l.id
+JOIN arti_metadata m ON m.arti_id = a.id
+WHERE k.kata = 'elang'
+ORDER BY l.id, a.nomor, m.id;
 
 -- Related words
 SELECT k.kata, l.lema, r.jenis, r.target
@@ -188,7 +215,7 @@ FROM kata k
 JOIN lema l ON l.kata_id = k.id
 JOIN relasi r ON r.lema_id = l.id
 WHERE k.kata = 'elang'
-ORDER BY l.urutan, r.id;
+ORDER BY l.id, r.id;
 
 -- Filter by class
 SELECT DISTINCT k.kata
@@ -207,6 +234,7 @@ SELECT tahun, judul FROM kata_tahun_ini ORDER BY tahun;
 | `kata` | 196,195 |
 | `lema` | 211,473 |
 | `arti` | 233,820 |
+| `arti_metadata` | 19,823 |
 | `contoh` | 47,792 |
 | `relasi` | 116,439 |
 | `kata_hari_ini` | 6,974 |
@@ -233,6 +261,8 @@ No:
 - `sumber_blok` and `sumber_offset` from the previous design were internal
   CAV provenance pointers.  They were not useful to a normal reader and are no
   longer in the customer tables.
+- `info.sumber_data` is stored as a relative path (`output/dictdata`), not a
+  machine-specific work directory.
 - `kata` is the headword; `lema` is the displayed syllabified form.  They are
   deliberately separate.
 - The previous single `kbbi` table was split into `kata`/`lema`/`arti` because

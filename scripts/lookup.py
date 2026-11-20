@@ -44,7 +44,7 @@ def _load_word(connection: sqlite3.Connection, row: sqlite3.Row) -> dict:
 
     word["lema"] = []
     for lema_row in connection.execute(
-        "SELECT * FROM lema WHERE kata_id = ? ORDER BY urutan", (word["id"],)
+        "SELECT * FROM lema WHERE kata_id = ? ORDER BY id", (word["id"],)
     ):
         lemma = dict(lema_row)
         lemma["arti"] = []
@@ -53,16 +53,16 @@ def _load_word(connection: sqlite3.Connection, row: sqlite3.Row) -> dict:
             "SELECT * FROM arti WHERE lema_id = ? ORDER BY nomor", (lemma["id"],)
         ):
             definition = dict(arti_row)
-            for field in (
-                "kelas_kata",
-                "bahasa",
-                "bidang",
-                "ragam",
-                "label",
-                "nama_ilmiah",
-                "rumus_kimia",
-            ):
+            for field in ("kelas_kata", "bahasa", "bidang", "ragam"):
                 definition[field] = json.loads(definition[field])
+            definition["metadata"] = {}
+            for metadata in connection.execute(
+                "SELECT kunci, nilai FROM arti_metadata WHERE arti_id = ? ORDER BY id",
+                (definition["id"],),
+            ):
+                definition["metadata"].setdefault(metadata["kunci"], []).append(
+                    metadata["nilai"]
+                )
             definition["contoh"] = [
                 dict(example)
                 for example in connection.execute(
@@ -116,12 +116,17 @@ def _print_word(word: dict) -> None:
                 ("bahasa", "bahasa"),
                 ("bidang", "bidang"),
                 ("ragam", "ragam"),
-                ("label", "label"),
-                ("nama ilmiah", "nama_ilmiah"),
-                ("rumus kimia", "rumus_kimia"),
             ):
                 if definition[field]:
                     print(f"      {label}: {', '.join(definition[field])}")
+            for key, label in (
+                ("label", "label"),
+                ("nama_ilmiah", "nama ilmiah"),
+                ("rumus_kimia", "rumus kimia"),
+            ):
+                values = definition["metadata"].get(key, [])
+                if values:
+                    print(f"      {label}: {', '.join(values)}")
             for example in definition["contoh"]:
                 print(f"      contoh: {example['teks']}")
 

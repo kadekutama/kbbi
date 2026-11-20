@@ -14,7 +14,7 @@ how the Salsa20 key is assembled, and provides a Python decryptor/extractor.
 | Headwords | 196,195 |
 | Description blocks | 28 (`acu_desc_0.s` … `acu_desc_27.s`) |
 | Decrypted CAV data | 26,240,696 bytes |
-| SQLite output | `output/kbbi.sqlite` (67 MiB) |
+| SQLite output | `output/kbbi.sqlite` (65 MiB) |
 | Cipher | Salsa20/20, then GZIP |
 | Key | `ffef8a8d11f535b73cd24fd31ef296d0573ade68b1f079cbdea460149ed4036e` |
 | Nonce | `fa1f5b7694c268fc` |

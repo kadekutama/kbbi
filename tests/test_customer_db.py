@@ -23,6 +23,8 @@ def test_build_customer_database(tmp_path: Path) -> None:
         + b"\x00\x01\n"
         + _cav_text(20, "n")
         + b"\x00\x01 "
+        + bytes([34])
+        + b"\x00\x01 "
         + _cav_text(0, "definisi")
         + _cav_text(50, "contoh")
         + bytes([12])
@@ -49,6 +51,7 @@ def test_build_customer_database(tmp_path: Path) -> None:
         "kata": 1,
         "lema": 1,
         "arti": 1,
+        "arti_metadata": 1,
         "contoh": 1,
         "relasi": 1,
         "kata_hari_ini": 1,
@@ -75,8 +78,15 @@ def test_build_customer_database(tmp_path: Path) -> None:
             "SELECT * FROM arti WHERE lema_id = ?", (lemma["id"],)
         ).fetchone()
         assert definition["nomor"] == 1
-        assert definition["arti"] == "[n] definisi"
+        assert definition["arti"] == "[n] sing definisi"
         assert json.loads(definition["kelas_kata"]) == ["Nomina"]
+
+        metadata = connection.execute(
+            "SELECT kunci, nilai FROM arti_metadata WHERE arti_id = ?",
+            (definition["id"],),
+        ).fetchone()
+        assert metadata["kunci"] == "label"
+        assert metadata["nilai"] == "singkatan"
 
         example = connection.execute(
             "SELECT * FROM contoh WHERE arti_id = ?", (definition["id"],)

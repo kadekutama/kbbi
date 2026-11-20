@@ -9,10 +9,15 @@ CREATE TABLE arti (
     kelas_kata TEXT NOT NULL DEFAULT '[]',
     bahasa TEXT NOT NULL DEFAULT '[]',
     bidang TEXT NOT NULL DEFAULT '[]',
-    ragam TEXT NOT NULL DEFAULT '[]',
-    label TEXT NOT NULL DEFAULT '[]',
-    nama_ilmiah TEXT NOT NULL DEFAULT '[]',
-    rumus_kimia TEXT NOT NULL DEFAULT '[]'
+    ragam TEXT NOT NULL DEFAULT '[]'
+);
+
+-- table: arti_metadata
+CREATE TABLE arti_metadata (
+    id INTEGER PRIMARY KEY,
+    arti_id INTEGER NOT NULL REFERENCES arti(id),
+    kunci TEXT NOT NULL,
+    nilai TEXT NOT NULL
 );
 
 -- table: contoh
@@ -64,7 +69,6 @@ CREATE TABLE kata_tahun_ini (
 CREATE TABLE lema (
     id INTEGER PRIMARY KEY,
     kata_id INTEGER NOT NULL REFERENCES kata(id),
-    urutan INTEGER NOT NULL,
     lema TEXT NOT NULL,
     homograf INTEGER,
     pelafalan TEXT,
@@ -90,6 +94,12 @@ CREATE TABLE tentang (
 
 -- index: idx_arti_lema
 CREATE INDEX idx_arti_lema ON arti(lema_id);
+
+-- index: idx_arti_metadata_arti
+CREATE INDEX idx_arti_metadata_arti ON arti_metadata(arti_id);
+
+-- index: idx_arti_metadata_kunci
+CREATE INDEX idx_arti_metadata_kunci ON arti_metadata(kunci);
 
 -- index: idx_contoh_arti
 CREATE INDEX idx_contoh_arti ON contoh(arti_id);
